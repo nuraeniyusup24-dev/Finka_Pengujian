@@ -36,23 +36,25 @@ definePageMeta({
       </div>
     </div>
 
-    <div class="card kolom keamanan-akun">
-      <div class="h display">Keamanan akun</div>
-      <div class="aturan__ket">Perbarui password akun yang sedang digunakan.</div>
-      <nuxt-link to="/akun/pemulihan" class="btn-sm">Reset password via OTP</nuxt-link>
-    </div>
+    <div class="keamanan-sesi">
+      <div class="card kolom keamanan-akun">
+        <div class="h display">Keamanan akun</div>
+        <div class="aturan__ket">Perbarui password akun yang sedang digunakan.</div>
+        <nuxt-link to="/akun/pemulihan" class="btn-sm">Reset password via OTP</nuxt-link>
+      </div>
 
-    <div class="card kolom keluar-akun">
-      <div class="h display">Sesi akun</div>
-      <div class="aturan__ket">Keluar dari akun yang sedang digunakan di perangkat ini.</div>
-      <button type="button" class="btn-sm btn-sm--keluar" @click="logout">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <path d="M16 17l5-5-5-5"/>
-          <path d="M21 12H9"/>
-        </svg>
-        <span>Logout</span>
-      </button>
+      <div class="card kolom keluar-akun">
+        <div class="h display">Sesi akun</div>
+        <div class="aturan__ket">Keluar dari akun yang sedang digunakan di perangkat ini.</div>
+        <button type="button" class="btn-sm btn-sm--keluar" @click="logout">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <path d="M16 17l5-5-5-5"/>
+            <path d="M21 12H9"/>
+          </svg>
+          <span>Logout</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -95,14 +97,14 @@ export default {
 </script>
 
 <style scoped>
-.page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; align-content: start; }
 .kolom { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .h { font: 700 14px var(--font-display); }
 .btn-sm { border: none; background: var(--blue); color: #fff; font: 600 12.5px var(--font-body); padding: 9px 15px; border-radius: var(--r-sm); cursor: pointer; }
 .page > .kolom:first-child { grid-column: 1 / -1; }
 .profil-akun { grid-column: 1 / -1; flex-direction: row; align-items: center; }
 .keamanan-akun, .keluar-akun { align-items: flex-start; }
-.keluar-akun { grid-column: 2; }
+.keamanan-sesi { grid-column: 2; display: flex; flex-direction: column; align-self: start; gap: 8px; }
 .keamanan-akun .btn-sm { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; text-decoration: none; }
 .btn-sm--keluar { border: 1px solid rgba(223, 74, 55, .25); background: #fff; color: var(--coral); }
 .keluar-akun .btn-sm { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; }
@@ -123,7 +125,7 @@ export default {
 @media (max-width: 760px) {
   .page { grid-template-columns: minmax(0, 1fr); }
   .page > .kolom:first-child { grid-column: auto; }
-  .keluar-akun { grid-column: auto; }
+  .keamanan-sesi { grid-column: auto; }
   .kolom { padding: 18px; }
 }
 

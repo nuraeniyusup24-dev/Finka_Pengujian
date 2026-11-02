@@ -25,8 +25,10 @@ definePageMeta({
       <button class="tab" :class="tab === 'admin' ? 'tab--on' : ''" @click="tab = 'admin'">
         Daftar Admin <span class="tab__n">{{ akunAdmin.length }}</span>
       </button>
-      <button v-if="admin" type="button" class="btn-sm btn-sm--secondary" @click="bukaImportExcel">Upload Excel</button>
-      <button v-if="admin" type="button" class="btn-sm" @click="formOn = true">Tambah akun</button>
+      <div v-if="admin" class="tabs__actions">
+        <button type="button" class="btn-sm btn-sm--secondary" @click="bukaImportExcel">Upload Excel</button>
+        <button type="button" class="btn-sm" @click="formOn = true">Tambah akun</button>
+      </div>
     </div>
 
     <!-- Akun siswa per kelas -->
@@ -455,6 +457,8 @@ export default {
 .tabs { align-items: center; flex-wrap: wrap; }
 .btn-sm { margin-left: auto; border: none; background: var(--blue); color: #fff; font: 600 12.5px var(--font-body); padding: 10px 16px; border-radius: var(--r-sm); cursor: pointer; }
 .btn-sm:hover { background: var(--blue-dark); }
+.tabs__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.tabs__actions .btn-sm { margin-left: 0; }
 
 .isi { display: flex; flex-direction: column; gap: 14px; }
 

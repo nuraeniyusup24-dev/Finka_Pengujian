@@ -10,7 +10,7 @@ definePageMeta({
     <ScreenHeader title="Detail Tagihan" to="/ortu/tagihan" />
     <div v-if="!bill" class="body"><div class="muat">Memuat…</div></div>
     <div v-else class="body">
-      <div class="head">
+      <div class="bill-head">
         <div class="periode">{{ bill.anakNama }}</div>
         <div class="nama display">{{ bill.nama }}</div>
         <div class="nominal display num">{{ bill.nominal | rp }}</div>
@@ -31,9 +31,15 @@ definePageMeta({
       <button v-if="bill.status !== 'lunas' && !pembayaranPending" class="btn btn--primary" @click="bayar">Bayar tagihan ini</button>
       <div v-else-if="pembayaranPending" class="pending-note">Pembayaran tagihan ini sedang menunggu verifikasi admin.</div>
       <div v-else class="lunas-note">Tagihan ini sudah lunas.</div>
-      <button v-if="bill.status === 'lunas'" class="btn btn--invoice" :disabled="mengunduhInvoice" @click="unduhInvoice">
-        {{ mengunduhInvoice ? 'Menyiapkan invoice…' : 'Unduh invoice pembayaran (PDF)' }}
-      </button>
+      <div v-if="bill.status === 'lunas'" class="invoice-actions">
+        <button class="btn btn--invoice" :disabled="mengunduhInvoice" @click="unduhInvoice('pdf')">
+          {{ mengunduhInvoice && formatInvoice === 'pdf' ? 'Menyiapkan PDF…' : 'Unduh invoice (PDF)' }}
+        </button>
+        <button class="btn btn--invoice" :disabled="mengunduhInvoice" @click="unduhInvoice('jpg')">
+          {{ mengunduhInvoice && formatInvoice === 'jpg' ? 'Menyiapkan JPG…' : 'Unduh invoice (JPG)' }}
+        </button>
+        <nuxt-link to="/ortu" class="btn btn--primary">Kembali ke beranda</nuxt-link>
+      </div>
       <p v-if="invoiceError" class="invoice-error" role="alert">{{ invoiceError }}</p>
     </div>
   </div>
@@ -41,12 +47,14 @@ definePageMeta({
 
 <script>
 import { tanggalIndo } from '~/utils/adapt'
+import { buatInvoiceJpg } from '~/utils/invoiceJpg'
 
 export default {
 
   data() {
     return {
       mengunduhInvoice: false,
+      formatInvoice: '',
       invoiceError: ''
     }
   },
@@ -81,19 +89,38 @@ export default {
       this.$store.commit('topup/setTagihan', this.bill.id)
       this.$router.push('/ortu/isi-saldo')
     },
-    async unduhInvoice() {
-      if (!this.bill || this.bill.status !== 'lunas' || this.mengunduhInvoice) return
+    async unduhInvoice(format) {
+      if (!this.bill || this.bill.status !== 'lunas' || this.mengunduhInvoice || !['pdf', 'jpg'].includes(format)) return
       this.mengunduhInvoice = true
+      this.formatInvoice = format
       this.invoiceError = ''
       try {
-        const { jsPDF } = await import('jspdf')
-        const doc = new jsPDF({ unit: 'mm', format: 'a4' })
         const payment = this.pembayaranTerverifikasi
-        const invoiceNumber = `INV-SPP-${String(this.bill.id).padStart(6, '0')}`
         const paidAt = payment?.diproses_at || payment?.waktu
         const paidDate = paidAt
           ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(paidAt))
           : 'Terverifikasi oleh Admin'
+        if (format === 'jpg') {
+          const { blob, nama } = await buatInvoiceJpg({
+            tagihan: this.bill,
+            tanggalBayar: paidDate,
+            tanggalJatuhTempo: tanggalIndo(this.bill.jatuh_tempo),
+            rupiah: this.$rp
+          })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = nama
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+          return
+        }
+
+        const { jsPDF } = await import('jspdf')
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+        const invoiceNumber = `INV-SPP-${String(this.bill.id).padStart(6, '0')}`
 
         doc.setFillColor(36, 49, 196)
         doc.roundedRect(15, 15, 180, 39, 4, 4, 'F')
@@ -145,6 +172,7 @@ export default {
         this.invoiceError = error.message || 'Invoice tidak dapat dibuat. Silakan coba kembali.'
       } finally {
         this.mengunduhInvoice = false
+        this.formatInvoice = ''
       }
     }
   }
@@ -155,7 +183,7 @@ export default {
 .wrap { flex: 1; display: flex; flex-direction: column; background: #fff; min-height: 0; }
 .body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 18px; }
 .muat { padding: 40px 20px; text-align: center; font: 500 13px var(--font-body); color: var(--muted); }
-.head { display: flex; flex-direction: column; gap: 6px; }
+.bill-head { display: flex; flex-direction: column; gap: 6px; }
 .periode { font: 600 12px var(--font-body); color: var(--muted); }
 .nama { font: 700 19px var(--font-display); }
 .nominal { font: 800 32px var(--font-display); letter-spacing: -.02em; margin-top: 6px; }
@@ -172,6 +200,7 @@ export default {
 .spacer { flex: 1; }
 .pending-note { text-align: center; font: 500 13px var(--font-body); color: var(--sand-ink); padding: 13px; background: rgba(192,169,127,.12); border-radius: var(--r-sm); }
 .lunas-note { text-align: center; font: 500 13px var(--font-body); color: var(--green); padding: 13px; background: rgba(26,128,64,.08); border-radius: var(--r-sm); }
+.invoice-actions { display: flex; flex-direction: column; gap: 10px; }
 .btn--invoice { border: 1px solid var(--blue); background: #fff; color: var(--blue); font-weight: 700; }
 .btn--invoice:disabled { opacity: .6; cursor: wait; }
 .invoice-error { margin: 0; color: var(--coral); text-align: center; font: 500 12px/1.5 var(--font-body); }

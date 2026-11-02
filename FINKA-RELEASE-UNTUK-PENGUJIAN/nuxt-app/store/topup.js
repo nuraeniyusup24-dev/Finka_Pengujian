@@ -56,12 +56,16 @@ export const mutations = {
 
 export const actions = {
   async ajukan({ state, commit, rootState }, pin) {
-    const anakId = state.anakAktifId || rootState.ortu.anakAktifId
-    if (!anakId) throw new Error('Pilih anak yang akan menerima saldo.')
+    const anakId = Number(rootState.ortu.anakAktifId)
+    const anakTerpilih = rootState.ortu.anak.find((anak) => Number(anak.id) === anakId)
+    if (!Number.isSafeInteger(anakId) || !anakTerpilih) {
+      throw new Error('Pilih anak yang akan menerima saldo.')
+    }
     if (!Number.isInteger(Number(state.nominal)) || Number(state.nominal) <= 0) {
       throw new Error('Nominal isi saldo tidak valid.')
     }
-    const response = await api.ajukanTopup(anakId, state.nominal, state.tagihanId, pin)
+    commit('setAnak', anakId)
+    const response = await api.ajukanTopup(anakTerpilih.id, state.nominal, state.tagihanId, pin)
     const topup = response.topup || response
     commit('setPermintaan', topup)
     return topup

@@ -141,6 +141,27 @@ definePageMeta({
       <button v-if="toast.tab !== tab" type="button" class="toast-verif__aksi" @click="lihatTab(toast.tab)">Lihat tab {{ toast.tab }}</button>
       <button type="button" class="toast-verif__tutup" aria-label="Tutup" @click="toast = null">×</button>
     </div>
+    <div
+      v-if="konfirmasiVerifikasiTerbuka"
+      class="konfirmasi-backdrop"
+      @click.self="tutupKonfirmasiVerifikasi"
+      @keydown.esc="tutupKonfirmasiVerifikasi"
+    >
+      <section class="konfirmasi-modal" role="dialog" aria-modal="true" aria-labelledby="konfirmasi-verifikasi-judul">
+        <h2 id="konfirmasi-verifikasi-judul">Verifikasi semua</h2>
+        <p>
+          Verifikasi {{ konfirmasiDenganBukti }} permintaan dengan bukti unggahan?
+          Admin bertanggung jawab memastikan bukti yang ada cocok dengan transfer.
+          {{ konfirmasiTanpaBukti }} permintaan tanpa bukti akan otomatis ditolak.
+        </p>
+        <div class="konfirmasi-actions">
+          <button type="button" class="btn-sm btn-sm--ghost" :disabled="memprosesSemua" @click="tutupKonfirmasiVerifikasi">Cancel</button>
+          <button type="button" class="btn-sm btn-sm--primary" :disabled="memprosesSemua" @click="konfirmasiVerifikasiSemua">
+            {{ memprosesSemua ? 'Memverifikasi…' : 'Oke' }}
+          </button>
+        </div>
+      </section>
+    </div>
     <ImageLightbox
       v-if="viewerTerbuka && buktiAsli"
       :src="buktiAsli.url"
@@ -163,6 +184,10 @@ export default {
       memuatBukti: false,
       memproses: false,
       memprosesSemua: false,
+      konfirmasiVerifikasiTerbuka: false,
+      konfirmasiIds: [],
+      konfirmasiDenganBukti: 0,
+      konfirmasiTanpaBukti: 0,
       apiError: '',
       toast: null,
       refreshTimer: null,
@@ -304,6 +329,11 @@ export default {
       const next = this.antrean.find((a) => a.id !== idSelesai)
       if (next) this.$store.commit('admin/setPilih', next.id)
     },
+    tutupKonfirmasiVerifikasi() {
+      if (this.memprosesSemua) return
+      this.konfirmasiVerifikasiTerbuka = false
+      this.konfirmasiIds = []
+    },
     async muatBukti(id) {
       if (this.proofLoadingId === id) return
       this.proofLoadingId = id
@@ -356,12 +386,15 @@ export default {
     },
     async verifikasiSemua() {
       if (!this.menunggu.length || this.memprosesSemua) return
-      const ids = this.menunggu.map((item) => item.id)
-      const tanpaBukti = this.menunggu.filter((item) => !item.bukti_tersedia).length
-      const denganBukti = ids.length - tanpaBukti
-      const konfirmasi = `Verifikasi ${denganBukti} permintaan dengan bukti unggahan? Admin bertanggung jawab memastikan bukti yang ada cocok dengan transfer. ${tanpaBukti} permintaan tanpa bukti akan otomatis ditolak.`
-      if (!window.confirm(konfirmasi)) return
+      this.konfirmasiIds = this.menunggu.map((item) => item.id)
+      this.konfirmasiTanpaBukti = this.menunggu.filter((item) => !item.bukti_tersedia).length
+      this.konfirmasiDenganBukti = this.konfirmasiIds.length - this.konfirmasiTanpaBukti
+      this.konfirmasiVerifikasiTerbuka = true
+    },
 
+    async konfirmasiVerifikasiSemua() {
+      if (!this.konfirmasiIds.length || this.memprosesSemua) return
+      const ids = [...this.konfirmasiIds]
       this.memprosesSemua = true
       this.apiError = ''
       try {
@@ -381,6 +414,8 @@ export default {
         this.apiError = error.message || 'Verifikasi massal tidak dapat diproses.'
       } finally {
         this.memprosesSemua = false
+        this.konfirmasiVerifikasiTerbuka = false
+        this.konfirmasiIds = []
       }
     },
     async kembalikan() {
@@ -431,6 +466,12 @@ export default {
 .list__tabs { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; }
 .bulk-verify { margin-left: auto; padding: 9px 13px; font-size: 12px; }
 .bulk-verify:disabled { opacity: .6; cursor: wait; }
+.konfirmasi-backdrop { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 18px; background: rgba(10, 13, 59, .52); }
+.konfirmasi-modal { width: min(460px, 100%); padding: 24px; border: 1px solid var(--line); border-radius: var(--r-lg); background: #fff; box-shadow: 0 24px 70px #0003; }
+.konfirmasi-modal h2 { margin: 0; font: 700 18px var(--font-display); color: var(--ink); }
+.konfirmasi-modal p { margin: 12px 0 22px; color: var(--muted); font: 400 13px/1.6 var(--font-body); }
+.konfirmasi-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.konfirmasi-actions .btn-sm:disabled { opacity: .6; cursor: wait; }
 .list__scroll { max-height: 760px; overflow-y: auto; }
 .item {
   width: 100%; text-align: left; border: none; border-bottom: 1px solid var(--bg);
