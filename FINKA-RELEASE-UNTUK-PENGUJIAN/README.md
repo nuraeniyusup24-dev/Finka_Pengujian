@@ -1,87 +1,107 @@
 # FINKA
 
-FINKA adalah aplikasi pengelolaan transaksi dan layanan keuangan siswa di lingkungan sekolah. Aplikasi ini menghubungkan siswa, orang tua/wali, petugas kantin (PIC), dan admin melalui satu frontend serta API backend.
+FINKA adalah aplikasi pengelolaan transaksi dan layanan keuangan siswa di lingkungan sekolah. Aplikasi ini menghubungkan siswa, orang tua/wali, petugas kantin (PIC), dan admin melalui satu frontend dan API backend.
 
-> **Status:** Paket ini ditujukan untuk pengujian terkontrol dan belum siap produksi. Build berhasil bukan bukti bahwa semua alur sudah teruji end-to-end. Periksa [fitur dan batasan](./FITUR-DAN-BATASAN.md), [catatan integrasi](./INTEGRASI.md), dan [hasil pemeriksaan](./HASIL-PENGUJIAN.md).
+> **Status proyek:** Untuk pengujian terkontrol; belum siap digunakan di lingkungan produksi. Build dan tes otomatis tidak menggantikan pengujian staging untuk seluruh transaksi, hak akses, pengiriman OTP, dan pemulihan data. Baca [fitur dan batasan][def] sebelum mencoba atau mengembangkan aplikasi.
 
-## Fitur utama
+## Fitur
 
-- **Siswa:** melihat profil, saldo dan riwayat; menggunakan QR kartu tetap untuk transaksi; membuat PIN pembayaran saat pertama kali masuk; dan memblokir kartu jika hilang.
-- **Orang Tua/Wali:** melihat data dan aktivitas anak, mengatur limit belanja, memblokir atau membuka blokir kartu, mereset PIN pembayaran anak, serta membuat PIN konfirmasi untuk pengajuan top-up dan pembayaran tagihan.
-- **PIC:** memindai QR siswa dan memproses transaksi kantin/koperasi sesuai outlet.
-- **Admin:** mengelola akun, siswa, tagihan, pembayaran dan operasional aplikasi.
-- **Pemulihan akun:** alur reset password dan reset PIN menggunakan OTP tersedia pada aplikasi. Pengiriman OTP bergantung pada konfigurasi provider serta kontak yang sudah diverifikasi.
+- **Siswa:** melihat profil, saldo, dan riwayat; melakukan transaksi dengan QR; mengatur PIN; dan memblokir kartu.
+- **Orang tua/wali:** melihat aktivitas anak, mengatur limit belanja, memblokir kartu, mengajukan isi saldo, membayar tagihan, serta mengelola PIN anak.
+- **PIC:** memindai QR siswa dan memproses transaksi kantin atau koperasi sesuai outlet.
+- **Admin:** mengelola akun, siswa, tagihan, pembayaran, dan operasional aplikasi.
+- **Layanan pendukung:** invoice, laporan, bukti transfer, dan pemulihan akun dengan OTP. Pengiriman OTP memerlukan konfigurasi provider serta kontak terverifikasi.
 
-**Catatan:** Kecocokan route frontend/backend telah diperiksa secara statis, tetapi belum membuktikan alur runtime. Provider OTP memerlukan kredensial dan kontak terverifikasi. Lihat [fitur dan batasan](./FITUR-DAN-BATASAN.md) dan [catatan integrasi](./INTEGRASI.md).
+### Alur akun santri
+
+Header Excel: `nama_siswa`, `nis`, `kelas`, `password_siswa`, `nama_ortu`, `username_ortu`, dan `password_ortu`. `username_ortu` boleh kosong untuk membuat akun wali baru dengan username otomatis; untuk akun wali baru, `password_ortu` wajib diisi. Untuk beberapa anak yang berbagi satu akun wali, gunakan password orang tua yang sama pada setiap baris. Jika `username_ortu` menghubungkan wali ke akun yang sudah ada, `password_ortu` boleh dikosongkan dan password lama tidak diubah. Pengguna login dengan nama lengkap atau NIS/username dan password masing-masing; santri wajib mengganti password sementara sebelum membuat PIN pembayaran baru. Password disimpan di database dalam bentuk hash, tetapi file Excel berisi password teks biasa sehingga harus dibagikan dan disimpan dengan aman.
 
 ## Teknologi
 
-| Bagian | Teknologi |
+| Komponen | Teknologi |
 |---|---|
 | Frontend | Nuxt 4, Vue 3, Vuex 4 |
-| Backend | Node.js 22.13+, Express |
-| Database | SQLite (file lokal, tanpa server database) |
+| Backend | Node.js, Express |
+| Database | SQLite melalui `node:sqlite` |
 | Autentikasi | JWT |
-| QR | QR kartu siswa tetap, dengan validasi di backend |
+
+Database disimpan sebagai file lokal (`backend/data/finka.db` secara default). PostgreSQL atau server database terpisah tidak diperlukan.
+
+## Persyaratan
+
+- Node.js `^22.22.3`, `^24.15.0`, atau `>=26.0.0` agar sesuai dengan versi Nuxt yang digunakan.
+- npm.
+
+## Menjalankan secara lokal
+
+Perintah berikut menggunakan PowerShell dan dijalankan dari folder utama proyek.
+
+### 1. Siapkan konfigurasi backend
+
+```powershell
+Copy-Item .\backend\.env.example .\backend\.env
+notepad .\backend\.env
+```
+
+Isi `JWT_SECRET`, `QR_SECRET`, dan `PIN_OTP_SECRET` dengan secret acak yang kuat dan berbeda. Jangan bagikan atau commit file `.env`. Untuk menjalankan fitur pemulihan akun, konfigurasi provider OTP dan kontak terverifikasi sesuai [panduan instalasi](./PANDUAN-INSTALASI.md).
+
+### 2. Instal dependency
+
+Di terminal pertama:
+
+```powershell
+Set-Location .\backend
+npm ci
+npm run dev
+```
+
+Backend berjalan di `http://localhost:3001`; health check tersedia di `http://localhost:3001/api/health`. Schema database dibuat otomatis saat backend dimulai. Di luar mode production, data demo hanya dibuat jika database masih kosong.
+
+### 3. Jalankan frontend
+
+Buka terminal PowerShell kedua di folder utama proyek:
+
+```powershell
+Set-Location .\nuxt-app
+npm ci
+$env:API_BASE_URL = 'http://localhost:3001/api'
+npm run dev
+```
+
+Buka `http://localhost:3000`. Biarkan kedua terminal tetap berjalan selama menggunakan aplikasi.
+
+## Pengujian dan build
+
+Jalankan perintah dari folder utama proyek:
+
+```powershell
+npm --prefix backend test
+node .\nuxt-app\scripts\csv-test.mjs
+npm --prefix nuxt-app run build
+```
+
+Tes dan build lokal bukan pengujian end-to-end atau sertifikasi keamanan. Sebelum deployment, ikuti [panduan pengujian](./PANDUAN-PENGUJIAN.md) dan jalankan skenario pada lingkungan staging dengan database terpisah.
 
 ## Struktur proyek
 
 ```text
 .
-├── backend/                 # API Express, database, dan tes
-├── nuxt-app/                # Frontend Nuxt untuk seluruh role
-├── PANDUAN-INSTALASI.md     # Langkah setup lokal yang lebih lengkap
-├── PANDUAN-PENGUJIAN.md     # Skenario pengujian per role
-├── FITUR-DAN-BATASAN.md     # Status rilis dan pekerjaan yang masih tersisa
+├── backend/                 # API Express, SQLite, dan tes backend
+├── nuxt-app/                # Frontend Nuxt
+├── PANDUAN-INSTALASI.md     # Setup lokal dan konfigurasi OTP
+├── PANDUAN-PENGUJIAN.md     # Skenario pengujian
+├── FITUR-DAN-BATASAN.md     # Status, batasan, dan prasyarat rilis
 ├── INTEGRASI.md             # Catatan integrasi frontend/backend
-└── HASIL-PENGUJIAN.md       # Hasil pemeriksaan paket
+└── HASIL-PENGUJIAN.md       # Catatan hasil pemeriksaan
 ```
 
-## Menjalankan secara lokal
+## Keamanan
 
-Persyaratan backend: Node.js 22.13 atau lebih baru. Untuk frontend Nuxt 4.6.3, gunakan Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`. **Tidak perlu PostgreSQL atau server database lain**; data disimpan di satu file SQLite (`backend/data/finka.db`, dibuat otomatis). Inisialisasi aplikasi membuat schema otomatis. Akun demo hanya dibuat di luar `NODE_ENV=production` dan hanya jika database kosong.
+- Gunakan secret dan database yang berbeda untuk development, staging, dan production.
+- Jangan commit `.env`, kredensial, file database lokal, token, PIN, atau OTP.
+- Jangan gunakan akun demo atau database pengujian untuk data nyata.
+- Untuk deployment, siapkan HTTPS, batasi `CORS_ORIGINS`, simpan kredensial provider di secret manager, dan uji backup/restore.
+- Tinjau [batasan rilis][def] dan hasil pemeriksaan terbaru sebelum menggunakan aplikasi di luar pengujian.
 
-Pengguna dapat masuk menggunakan nama lengkap akun. Username atau NIS yang sudah terdaftar tetap dapat digunakan; jika nama lengkap sama pada beberapa akun, gunakan username atau NIS.
 
-Untuk konfigurasi rahasia dan akun demo, ikuti [PANDUAN-INSTALASI.md](./PANDUAN-INSTALASI.md). Untuk mengulang dari nol, hentikan backend lalu hapus folder `backend/data`.
-
-1. Salin `backend/.env.example` menjadi `backend/.env`, lalu isi konfigurasi lokal yang diperlukan. Jangan commit atau membagikan `.env`.
-2. Di terminal pertama:
-
-   ```powershell
-   cd .\backend
-   npm ci
-   npm run dev
-   ```
-
-3. Di terminal kedua:
-
-   ```powershell
-   cd .\nuxt-app
-   npm ci
-   $env:API_BASE_URL = 'http://localhost:3001/api'
-   npm run dev
-   ```
-
-4. Buka `http://localhost:3000`. Backend menyediakan health check di `http://localhost:3001/api/health`.
-
-Lokasi file database dapat diubah dengan `DB_PATH` di `backend/.env`. Untuk menjalankan produksi, atur `NODE_ENV=production`; startup dan perintah seed tidak akan membuat akun demo.
-
-## Pemeriksaan
-
-Jalankan dari direktori proyek:
-
-```powershell
-npm --prefix backend test
-npm --prefix nuxt-app run build
-```
-
-Tes backend mencakup pemulihan PIN/password, kontrak adapter OTP, validasi, dan pencegahan seed demo di production. Build frontend memeriksa kompilasi; keduanya tidak menggantikan pengujian API, deliverability provider OTP, printer, atau alur lintas role secara end-to-end.
-
-## Keamanan dan konfigurasi
-
-- Buat secret JWT, QR, dan OTP yang kuat dan berbeda untuk tiap lingkungan.
-- Simpan kredensial provider email/WhatsApp dan koneksi database hanya di environment backend. Jangan masukkan rahasia ke README, source control, atau tangkapan layar.
-- Jangan gunakan akun demo di luar database disposable.
-- Frontend masih memakai Nuxt 2 dan Vue 2 yang sudah mencapai akhir masa dukungan. Audit dependency produksi terakhir pada 1 November 2026 melaporkan 62 temuan (24 high, 25 moderate, 13 low). Perbaikan kompatibel telah diterapkan, tetapi advisory pada framework lama masih ada; jangan gunakan untuk produksi sebelum migrasi framework dan pengujian ulang.
-- Sebelum penggunaan nyata, selesaikan [pekerjaan tersisa](./FITUR-DAN-BATASAN.md), konfigurasi CORS dan provider OTP, serta jalankan tes staging dan prosedur backup/pemulihan.
+[def]: ./FITUR-DAN-BATASAN.md

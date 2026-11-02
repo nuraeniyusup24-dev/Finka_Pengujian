@@ -89,7 +89,7 @@ export const passwordRecoveryRepository = {
           .run(resetTokenDigest, resetExpiresAt, challengeId),
         accountEligible: async () => Boolean(challenge && await eligibleContact(challenge.user_id, challenge.channel)),
         resetPassword: async (passwordHash) => {
-          const update = await db.prepare("UPDATE users SET password_hash = ? WHERE id = ? AND active = 1").run(passwordHash, challenge?.user_id)
+          const update = await db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND active = 1").run(passwordHash, challenge?.user_id)
           if (update.changes !== 1) return false
           await db.prepare('UPDATE password_otp_challenges SET reset_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(challengeId)
           return true

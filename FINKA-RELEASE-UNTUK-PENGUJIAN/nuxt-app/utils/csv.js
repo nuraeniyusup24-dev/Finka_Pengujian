@@ -62,8 +62,10 @@ const KUNCI = {
   nama_siswa: ['namasiswa', 'siswa', 'nama', 'namalengkap', 'namalengkapsiswa'],
   nis: ['nis', 'nisn', 'nomorinduk', 'nomorinduksiswa'],
   kelas: ['kelas', 'rombel'],
+  password_siswa: ['passwordsiswa', 'password', 'sandisiswa'],
   nama_ortu: ['namaortu', 'namaorangtua', 'ortu', 'orangtua', 'wali', 'namawali', 'namaorangtuawali'],
-  username_ortu: ['usernameortu', 'userortu', 'usernameorangtua', 'idortu', 'usernamewali']
+  username_ortu: ['usernameortu', 'userortu', 'usernameorangtua', 'idortu', 'usernamewali'],
+  password_ortu: ['passwordortu', 'passwordorangtua', 'passwordwali', 'sandiortu']
 }
 
 // Cocokkan kepala kolom dengan nama kolom baku; kembalikan baris objek siap kirim ke server.
@@ -73,7 +75,7 @@ export function petakanImpor({ rows, lines }) {
   const kepala = rows[0].map(norm)
   const idx = {}
   for (const [k, alias] of Object.entries(KUNCI)) idx[k] = kepala.findIndex((h) => alias.includes(h))
-  const hilang = ['nama_siswa', 'nis', 'kelas', 'nama_ortu'].filter((k) => idx[k] < 0)
+  const hilang = ['nama_siswa', 'nis', 'kelas', 'password_siswa', 'nama_ortu', 'password_ortu'].filter((k) => idx[k] < 0)
   if (hilang.length) return { baris: [], galat: 'Kolom wajib tidak ditemukan di baris pertama: ' + hilang.join(', ') + '. Gunakan templat.' }
   const baris = rows.slice(1).map((r, i) => {
     const o = { no: lines[i + 1] }
@@ -85,8 +87,8 @@ export function petakanImpor({ rows, lines }) {
 }
 
 export const TEMPLAT_IMPOR = [
-  ['nama_siswa', 'nis', 'kelas', 'nama_ortu', 'username_ortu'],
-  ['Rina Wulandari', '25010001', '7A', 'Bapak Hadi', 'ortu.hadi'],
-  ['Raka Hadi', '25010002', '5B', 'Bapak Hadi', 'ortu.hadi'],
-  ['Sinta Putri', '25010003', '7A', 'Ibu Dewi', '']
+  ['nama_siswa', 'nis', 'kelas', 'password_siswa', 'nama_ortu', 'username_ortu', 'password_ortu'],
+  ['Rina Wulandari', '25010001', '7A', 'Contoh-Rina-741!', 'Bapak Hadi', '', 'Contoh-Ortu-741!'],
+  ['Raka Wulandari', '25010002', '7B', 'Contoh-Raka-852!', 'Bapak Hadi', '', 'Contoh-Ortu-741!'],
+  ['Sinta Putri', '25010003', '7A', 'Contoh-Sinta-963!', 'Ibu Dewi', '', 'Contoh-Ortu-963!']
 ]

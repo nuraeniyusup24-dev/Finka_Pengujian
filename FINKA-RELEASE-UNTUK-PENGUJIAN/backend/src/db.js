@@ -399,6 +399,11 @@ export async function initDb() {
       ON CONFLICT (user_id) DO NOTHING;
   `)
 
+  const userColumns = await db.prepare('PRAGMA table_info(users)').all()
+  if (!userColumns.some((column) => column.name === 'must_change_password')) {
+    await db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK(must_change_password IN (0,1))')
+  }
+
   // Backfill transaksi POS lama supaya riwayat sebelum upgrade juga bisa dibatalkan
   // dan direkonsiliasi. Ledger tetap menjadi sumber saldo; tabel ini hanya metadata.
   await db.exec(`INSERT INTO pos_transaction_meta (ledger_id, pic_id, outlet, tipe_asal, total, created_at)

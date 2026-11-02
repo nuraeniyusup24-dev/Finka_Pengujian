@@ -26,6 +26,8 @@ adminUsersRouter.get('/users', wajibLogin, hanyaAdmin, async (req, res) => {
   try {
     const list = await db.prepare(`
       SELECT u.id, u.username, u.nama, u.role, u.outlet, u.active,
+             u.must_change_password AS wajib_ganti_password,
+             (u.password_hash IS NOT NULL) AS password_terpasang,
              LOWER(up.hubungan) AS hubungan, up.pekerjaan, up.no_hp, up.email,
              sp.kelas AS kelas, sp.nis AS nis, sp.ortu_id AS ortu_id,
              ortuUser.nama AS ortu_nama
@@ -123,7 +125,7 @@ adminUsersRouter.post('/users/:id/reset-password', wajibLogin, hanyaAdmin, async
   if (target.role === 'admin' && id === Number(req.user.id)) return res.status(400).json({ error: 'Admin tidak dapat mereset password akunnya sendiri dari menu ini' })
   const passwordSementara = crypto.randomBytes(9).toString('base64url')
   const passwordHash = bcrypt.hashSync(passwordSementara, 10)
-  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id)
+  await db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(passwordHash, id)
   await audit(req, 'RESET_PASSWORD_AKUN', `${target.role} #${id} · password direset`, 'users', id)
   res.json({ username: target.username, password_sementara: passwordSementara })
 })

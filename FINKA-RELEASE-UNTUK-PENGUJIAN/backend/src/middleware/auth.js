@@ -28,10 +28,17 @@ export async function wajibLogin(req, res, next) {
     req.user = jwt.verify(token, JWT_SECRET)
     // Status akun selalu dibaca ulang dari DB agar akun yang dinonaktifkan
     // langsung kehilangan akses walaupun JWT-nya belum kedaluwarsa.
-    const user = await db.prepare('SELECT id, role, nama, username, outlet, active FROM users WHERE id = ?').get(req.user.id)
+    const user = await db.prepare('SELECT id, role, nama, username, outlet, active, must_change_password FROM users WHERE id = ?').get(req.user.id)
     if (!user) return res.status(401).json({ error: 'Akun tidak ditemukan' })
     if (Number(user.active) !== 1) return res.status(403).json({ error: 'Akun sedang dinonaktifkan oleh Admin' })
     req.user = { ...req.user, ...user }
+    const currentPath = req.originalUrl.split('?')[0]
+    const passwordSetupAllowed =
+      (req.method === 'GET' && currentPath === '/api/auth/me') ||
+      (req.method === 'POST' && currentPath === '/api/auth/ganti-password')
+    if (Number(user.must_change_password) === 1 && !passwordSetupAllowed) {
+      return res.status(403).json({ error: 'Ganti password sementara Anda sebelum melanjutkan' })
+    }
     next()
   } catch (e) {
     return res.status(401).json({ error: 'Token tidak valid atau kedaluwarsa' })
@@ -48,4 +55,3 @@ export function wajibRole(...roles) {
     next()
   }
 }
-

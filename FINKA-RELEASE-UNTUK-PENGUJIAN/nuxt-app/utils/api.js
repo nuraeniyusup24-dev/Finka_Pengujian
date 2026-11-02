@@ -109,6 +109,8 @@ export const api = {
   notifikasiAdmin: () => request('GET', '/admin/notifikasi'),
   adminUsers: () => request('GET', '/admin/users'),
   buatAkun: (payload) => request('POST', '/admin/users', payload),
+  aturPasswordSiswa: (id, password, konfirmasiPassword) =>
+    request('POST', '/admin/users/' + id + '/password', { password, konfirmasi_password: konfirmasiPassword }),
   imporSiswa: (baris, simpan) => request('POST', '/admin/impor-siswa', { baris, simpan }),
   tagihanRingkasan: (bulan) => request('GET', '/admin/tagihan-ringkasan' + (bulan ? '?bulan=' + encodeURIComponent(bulan) : '')),
   buatTagihan: (payload) => request('POST', '/admin/tagihan/bulk', payload),

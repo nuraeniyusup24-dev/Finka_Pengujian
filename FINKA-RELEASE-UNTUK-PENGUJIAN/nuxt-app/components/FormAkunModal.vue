@@ -115,6 +115,7 @@
           <span>Password awal</span>
           <input v-model="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter" />
         </label>
+        <p v-if="jenis === 'siswa'" class="hint">Siswa wajib mengganti password ini saat login pertama, lalu membuat PIN pembayaran baru.</p>
         <p v-if="error" class="error">{{ error }}</p>
       </div>
 

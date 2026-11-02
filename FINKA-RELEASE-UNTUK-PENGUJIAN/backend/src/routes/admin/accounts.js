@@ -58,8 +58,8 @@ adminAccountsRouter.post('/users/siswa', wajibLogin, hanyaAdmin, async (req, res
       }
 
       const student = await db.prepare(`INSERT INTO users
-        (username, password_hash, nama, role, outlet, active)
-        VALUES (?, ?, ?, 'siswa', NULL, 1)`)
+        (username, password_hash, nama, role, outlet, active, must_change_password)
+        VALUES (?, ?, ?, 'siswa', NULL, 1, 1)`)
         .run(username, passwordHash, nama)
       await db.prepare(`INSERT INTO siswa_profil (user_id, ortu_id, kelas, nis)
         VALUES (?, ?, ?, ?)`)
@@ -93,18 +93,33 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
     nama_siswa: String(row?.nama_siswa || '').trim(),
     nis: String(row?.nis || '').trim(),
     kelas: String(row?.kelas || '').trim(),
+    password_siswa: String(row?.password_siswa ?? ''),
     nama_ortu: String(row?.nama_ortu || '').trim(),
     username_ortu: String(row?.username_ortu || '').trim(),
+    password_ortu: String(row?.password_ortu ?? ''),
     error: ''
   }))
   const nisCount = new Map()
   const parentNames = new Map()
+  const parentPasswords = new Map()
+  const existingParents = new Map()
   for (const row of normalized) {
     nisCount.set(row.nis, (nisCount.get(row.nis) || 0) + 1)
     const key = row.username_ortu ? `u:${row.username_ortu.toLowerCase()}` : `n:${row.nama_ortu.toLowerCase()}`
     if (!parentNames.has(key)) parentNames.set(key, row.nama_ortu)
     else if (parentNames.get(key).toLowerCase() !== row.nama_ortu.toLowerCase()) {
       row.error = 'Nama orang tua berbeda untuk username yang sama.'
+    }
+    if (row.username_ortu && !existingParents.has(row.username_ortu.toLowerCase())) {
+      const parent = await db.prepare('SELECT role, active FROM users WHERE lower(username) = lower(?)').get(row.username_ortu)
+      existingParents.set(row.username_ortu.toLowerCase(), parent || null)
+    }
+    const existingParent = row.username_ortu ? existingParents.get(row.username_ortu.toLowerCase()) : null
+    if (!existingParent) {
+      if (!parentPasswords.has(key)) parentPasswords.set(key, row.password_ortu)
+      else if (parentPasswords.get(key) !== row.password_ortu) {
+        row.error = 'Password orang tua harus sama untuk semua siswa yang memakai akun orang tua yang sama.'
+      }
     }
   }
 
@@ -113,8 +128,11 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
     if (!row.nama_siswa || row.nama_siswa.length > 80) errors.push('Nama siswa wajib diisi (maksimal 80 karakter).')
     if (!row.nis || row.nis.length > 30 || !/^[A-Za-z0-9._-]{1,30}$/.test(row.nis)) errors.push('NIS wajib dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung.')
     if (!row.kelas || row.kelas.length > 20) errors.push('Kelas wajib diisi (maksimal 20 karakter).')
+    if (!passwordValid(row.password_siswa)) errors.push('Password siswa wajib diisi (8–72 byte).')
     if (!row.nama_ortu || row.nama_ortu.length > 80) errors.push('Nama orang tua wajib diisi (maksimal 80 karakter).')
     if (row.username_ortu && !usernameValid(row.username_ortu)) errors.push('Username orang tua tidak valid.')
+    const existingParent = row.username_ortu ? existingParents.get(row.username_ortu.toLowerCase()) : null
+    if (!existingParent && !passwordValid(row.password_ortu)) errors.push('Password orang tua wajib diisi untuk akun baru (8–72 byte).')
     if (nisCount.get(row.nis) > 1) errors.push('NIS duplikat di dalam file.')
 
     if (row.nis && /^[A-Za-z0-9._-]{1,30}$/.test(row.nis)) {
@@ -122,9 +140,8 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
       const existingUsername = await db.prepare('SELECT id FROM users WHERE username = ?').get(row.nis)
       if (existing || existingUsername) errors.push('NIS atau username sudah digunakan.')
     }
-    if (row.username_ortu && usernameValid(row.username_ortu)) {
-      const parent = await db.prepare('SELECT role, active FROM users WHERE username = ?').get(row.username_ortu)
-      if (parent && (parent.role !== 'ortu' || Number(parent.active) !== 1)) errors.push('Username orang tua sudah digunakan atau akunnya tidak aktif.')
+    if (existingParent && (existingParent.role !== 'ortu' || Number(existingParent.active) !== 1)) {
+      errors.push('Username orang tua sudah digunakan atau akunnya tidak aktif.')
     }
     if (row.error) errors.push(row.error)
     row.error = [...new Set(errors)].join(' ')
@@ -135,7 +152,7 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
     pratinjau: !simpan,
     valid: normalized.filter((row) => !row.error).length,
     jumlah_error: normalized.filter((row) => row.error).length,
-    baris: normalized
+    baris: normalized.map(({ password_siswa, password_ortu, ...row }) => row)
   }
   if (!simpan) return res.json(preview)
   if (preview.jumlah_error) return res.status(400).json({ ...preview, error: 'Perbaiki baris yang ditandai sebelum menyimpan.' })
@@ -152,7 +169,7 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
         let parent = parentByKey.get(parentKey)
         if (!parent) {
           if (row.username_ortu) {
-            const existing = await db.prepare("SELECT id, username, nama, role, active FROM users WHERE username = ?").get(row.username_ortu)
+            const existing = await db.prepare("SELECT id, username, nama, role, active FROM users WHERE lower(username) = lower(?)").get(row.username_ortu)
             if (existing) {
               if (existing.role !== 'ortu' || Number(existing.active) !== 1) {
                 const error = new Error(`Akun orang tua "${row.username_ortu}" tidak valid atau tidak aktif.`)
@@ -173,7 +190,7 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
                 username = `${base}.${crypto.randomBytes(3).toString('hex')}`
               } while (await db.prepare('SELECT id FROM users WHERE username = ?').get(username))
             }
-            const password = crypto.randomBytes(9).toString('base64url')
+            const password = row.password_ortu
             const created = await db.prepare(`INSERT INTO users (username, password_hash, nama, role, outlet, active)
               VALUES (?, ?, ?, 'ortu', NULL, 1)`)
               .run(username, bcrypt.hashSync(password, 10), row.nama_ortu)
@@ -183,10 +200,11 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
           parentByKey.set(parentKey, parent)
         }
 
-        const password = crypto.randomBytes(9).toString('base64url')
-        const student = await db.prepare(`INSERT INTO users (username, password_hash, nama, role, outlet, active)
-          VALUES (?, ?, ?, 'siswa', NULL, 1)`)
-          .run(row.nis, bcrypt.hashSync(password, 10), row.nama_siswa)
+        const passwordHash = bcrypt.hashSync(row.password_siswa, 10)
+        const student = await db.prepare(`INSERT INTO users
+          (username, password_hash, nama, role, outlet, active, must_change_password)
+          VALUES (?, ?, ?, 'siswa', NULL, 1, 1)`)
+          .run(row.nis, passwordHash, row.nama_siswa)
         await db.prepare('INSERT INTO siswa_profil (user_id, ortu_id, kelas, nis) VALUES (?, ?, ?, ?)')
           .run(student.lastInsertRowId, parent.id, row.kelas, row.nis)
         await audit(req, 'BUAT_AKUN', `siswa · ${row.nama_siswa} · kelas ${row.kelas} · impor Excel`, 'users', Number(student.lastInsertRowId))
@@ -195,7 +213,6 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
           kelas: row.kelas,
           nis: row.nis,
           username_siswa: row.nis,
-          password_siswa: password,
           nama_ortu: parent.nama,
           username_ortu: parent.username,
           password_ortu: parent.password || '(akun lama, password tidak diubah)'
@@ -210,6 +227,39 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
     if (isUniqueViolation(error)) return res.status(409).json({ error: 'NIS atau username sudah dipakai. Muat ulang data, lalu periksa file Excel.' })
     console.error('Gagal mengimpor akun siswa:', error)
     res.status(500).json({ error: pesanErrorSql(error, 'Gagal menyimpan impor akun siswa') })
+  }
+})
+
+adminAccountsRouter.post('/users/:id/password', wajibLogin, hanyaAdmin, async (req, res) => {
+  const id = Number(req.params.id)
+  const password = req.body?.password
+  const confirmation = req.body?.konfirmasi_password
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID akun tidak valid' })
+  if (!passwordValid(password) || password !== confirmation) {
+    return res.status(400).json({ error: 'Password harus 8–72 byte dan konfirmasinya harus sama' })
+  }
+
+  try {
+    const result = await db.transaction(async () => {
+      const target = await db.prepare("SELECT id, nama, username FROM users WHERE id = ? AND role = 'siswa'").get(id)
+      if (!target) {
+        const error = new Error('Akun siswa tidak ditemukan')
+        error.status = 404
+        throw error
+      }
+      const passwordHash = bcrypt.hashSync(password, 10)
+      await db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(passwordHash, id)
+      await audit(req, 'ATUR_PASSWORD_AWAL_SISWA', `Admin mengatur password awal siswa #${id}`, 'users', id)
+      return target
+    })()
+    res.json({
+      message: 'Password awal berhasil diatur. Siswa wajib menggantinya saat login pertama.',
+      user: { id: result.id, nama: result.nama, username: result.username, password_terpasang: true, wajib_ganti_password: true }
+    })
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message })
+    console.error('Gagal mengatur password awal siswa:', error)
+    res.status(500).json({ error: 'Gagal mengatur password awal siswa' })
   }
 })
 
@@ -302,9 +352,9 @@ adminAccountsRouter.post('/users', wajibLogin, hanyaAdmin, async (req, res) => {
       const salt = bcrypt.genSaltSync(10)
       const password_hash = bcrypt.hashSync(password, salt)
       const info = await db.prepare(`
-        INSERT INTO users (username, password_hash, pin_hash, nama, role, outlet, active)
-        VALUES (?, ?, ?, ?, ?, ?, 1)
-      `).run(usernameBersih, password_hash, null, namaBersih, role, role === 'pic' ? outletNama : null)
+        INSERT INTO users (username, password_hash, pin_hash, nama, role, outlet, active, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+      `).run(usernameBersih, password_hash, null, namaBersih, role, role === 'pic' ? outletNama : null, role === 'siswa' ? 1 : 0)
       const userId = info.lastInsertRowid
 
       if (hubungan || pekerjaan || hpBersih || emailBersih) {
@@ -397,8 +447,8 @@ adminAccountsRouter.post('/users/siswa-ortu', wajibLogin, hanyaAdmin, async (req
         .run(ortu.lastInsertRowid, hubunganMap[String(ortu_hubungan || '').toLowerCase()] || null, phoneClean || null, emailClean || null)
 
       const siswa = await db.prepare(`
-        INSERT INTO users (username, password_hash, nama, role, outlet, active)
-        VALUES (?, ?, ?, 'siswa', NULL, 1)
+        INSERT INTO users (username, password_hash, nama, role, outlet, active, must_change_password)
+        VALUES (?, ?, ?, 'siswa', NULL, 1, 1)
       `).run(siswaUsername, hash(siswa_password), siswa_nama.trim())
 
       await db.prepare(`

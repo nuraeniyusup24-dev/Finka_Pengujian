@@ -65,6 +65,7 @@ authRouter.post('/login', async (req, res) => {
 
 authRouter.get('/me', wajibLogin, async (req, res) => {
   const user = await db.prepare(`SELECT u.id, u.nama, u.role, u.username, u.outlet, u.active,
+      u.must_change_password AS wajib_ganti_password,
       (u.role IN ('siswa', 'ortu') AND u.pin_hash IS NULL) AS wajib_buat_pin,
       COALESCE(own.email, parent.email) AS email,
       COALESCE(own.no_hp, parent.no_hp) AS no_hp,
@@ -79,7 +80,7 @@ authRouter.get('/me', wajibLogin, async (req, res) => {
     LEFT JOIN user_avatars avatar ON avatar.user_id = u.id
     WHERE u.id = ?`).get(req.user.id)
   if (!user) return res.status(404).json({ error: 'User tidak ditemukan' })
-  res.json({ user: { ...user, active: Number(user.active) === 1, wajib_buat_pin: Boolean(user.wajib_buat_pin), kontak_orang_tua: Boolean(user.kontak_orang_tua) } })
+  res.json({ user: { ...user, active: Number(user.active) === 1, wajib_ganti_password: Boolean(user.wajib_ganti_password), wajib_buat_pin: Boolean(user.wajib_buat_pin), kontak_orang_tua: Boolean(user.kontak_orang_tua) } })
 })
 
 authRouter.post('/me/avatar', wajibLogin, async (req, res) => {
@@ -183,13 +184,14 @@ authRouter.put('/me/contact', wajibLogin, async (req, res) => {
 authRouter.post('/ganti-password', wajibLogin, async (req, res) => {
   const passwordLama = String(req.body?.password_lama || '')
   const passwordBaru = String(req.body?.password_baru || '')
-  if (!passwordLama || passwordBaru.length < 8 || passwordBaru.length > 72) {
+  if (!passwordLama || passwordBaru.length < 8 || Buffer.byteLength(passwordBaru, 'utf8') > 72) {
     return res.status(400).json({ error: 'Password lama wajib diisi; password baru harus 8–72 karakter' })
   }
   const user = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id)
   if (!user?.password_hash || !bcrypt.compareSync(passwordLama, user.password_hash)) return res.status(401).json({ error: 'Password lama tidak benar' })
+  if (bcrypt.compareSync(passwordBaru, user.password_hash)) return res.status(400).json({ error: 'Password baru harus berbeda dari password lama' })
   const passwordHash = bcrypt.hashSync(passwordBaru, 10)
-  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id)
+  await db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(passwordHash, req.user.id)
   await audit(req, 'GANTI_PASSWORD', 'Pengguna mengganti password', 'users', Number(req.user.id))
   res.json({ pesan: 'Password berhasil diubah' })
 })

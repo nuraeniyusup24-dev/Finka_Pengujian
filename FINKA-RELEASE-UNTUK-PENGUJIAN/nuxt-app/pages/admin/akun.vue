@@ -54,7 +54,7 @@ definePageMeta({
           </div>
         </div>
         <div class="baris baris--head">
-          <div>NAMA</div><div>NIS</div><div>ORANG TUA</div><div>STATUS</div>
+          <div>NAMA</div><div>NIS</div><div>ORANG TUA</div>          <div>STATUS / PASSWORD</div>
         </div>
         <div v-for="u in akunSiswaKelas(kelasAktif)" :key="u.id || u.nis" class="baris">
           <div class="nama">
@@ -63,7 +63,13 @@ definePageMeta({
           </div>
           <div class="muted num">{{ u.nis || '—' }}</div>
           <div class="muted">{{ u.ortu || 'Belum terhubung' }}</div>
-          <div><span class="badge" :class="u.status === 'Aktif' ? 'badge--ok' : 'badge--off'">{{ u.status }}</span></div>
+          <div class="status-siswa">
+            <span class="badge" :class="u.status === 'Aktif' ? 'badge--ok' : 'badge--off'">{{ u.status }}</span>
+            <span class="status-password">{{ u.password_terpasang ? (u.wajib_ganti_password ? 'Password sementara' : 'Password tersedia') : 'Password belum diatur' }}</span>
+            <button type="button" class="btn-password" @click="bukaAturPassword(u)">
+              {{ u.password_terpasang ? 'Reset password' : 'Atur password' }}
+            </button>
+          </div>
         </div>
         <div v-if="!loadingUsers && !akunSiswaKelas(kelasAktif).length" class="empty-state">Belum ada siswa di kelas ini.</div>
       </div>
@@ -157,8 +163,8 @@ definePageMeta({
             <span>Pilih workbook (.xlsx)</span>
             <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="importExcel.loading" @change="pilihFileExcel" />
           </label>
-          <p class="impor-note">Kolom wajib: nama_siswa, nis, kelas, nama_ortu. username_ortu opsional; isi untuk menghubungkan akun orang tua yang sudah ada. Maksimal 300 siswa dan 3 MB per file.</p>
-          <p class="impor-note">Password awal dibuat otomatis dan hanya ditampilkan pada file kredensial. Siswa dan orang tua membuat PIN sendiri saat pertama kali masuk.</p>
+          <p class="impor-note">Kolom wajib: nama_siswa, nis, kelas, password_siswa, nama_ortu, password_ortu. Password siswa dan orang tua minimal 8 karakter. Untuk kakak-adik dalam satu akun wali, gunakan password_ortu yang sama. username_ortu opsional; isi untuk menghubungkan akun wali yang sudah ada (password_ortu boleh dikosongkan dan tidak mengubah password lama). Maksimal 300 siswa dan 3 MB per file.</p>
+          <p class="impor-note">Siswa dapat login menggunakan nama lengkap atau NIS dan password dari Excel. Pada login pertama, siswa wajib mengganti password sementara lalu membuat PIN baru. Simpan file Excel dengan aman karena berisi password.</p>
           <p v-if="importExcel.namaFile" class="impor-filename">{{ importExcel.namaFile }}</p>
           <p v-if="importExcel.error" class="impor-error" role="alert">{{ importExcel.error }}</p>
           <div v-if="importExcel.pratinjau" class="impor-preview">
@@ -185,11 +191,12 @@ definePageMeta({
         </div>
         <div v-else class="impor-body">
           <p class="impor-ok">{{ importExcel.hasil.jumlah }} akun siswa berhasil dibuat dan terhubung ke akun orang tua.</p>
-          <p class="impor-note">Simpan file kredensial dengan aman. Password tidak dapat dilihat kembali setelah modal ini ditutup.</p>
+          <p class="impor-note">Password awal setiap siswa sudah diatur dari Excel. Siswa login menggunakan nama lengkap atau NIS dan password pada file, lalu wajib mengganti password pada login pertama sebelum membuat PIN pembayaran.</p>
+          <p class="impor-note">Simpan file Excel dengan aman dan bagikan kredensial hanya kepada pemilik akun. File unduhan terpisah hanya berisi kredensial akun orang tua yang baru dibuat.</p>
         </div>
         <footer class="impor-actions">
           <button v-if="!importExcel.hasil" type="button" class="impor-cancel" :disabled="importExcel.loading" @click="tutupImportExcel">Batal</button>
-          <button v-if="importExcel.hasil" type="button" class="impor-primary" @click="unduhKredensialExcel">Unduh kredensial (CSV)</button>
+          <button v-if="importExcel.hasil" type="button" class="impor-primary" @click="unduhKredensialOrtu">Unduh kredensial orang tua (CSV)</button>
           <button
             v-else
             type="button"
@@ -199,6 +206,35 @@ definePageMeta({
           >{{ importExcel.loading ? 'Memproses…' : 'Daftarkan semua akun' }}</button>
           <button v-if="importExcel.hasil" type="button" class="impor-cancel" @click="tutupImportExcel">Selesai</button>
         </footer>
+      </section>
+    </div>
+    <div v-if="passwordSiswa.buka" class="impor-backdrop" @click.self="tutupAturPassword">
+      <section class="impor-modal password-modal" role="dialog" aria-modal="true" aria-labelledby="password-siswa-title">
+        <div class="impor-head">
+          <div>
+            <h2 id="password-siswa-title">Atur password siswa</h2>
+            <p>{{ passwordSiswa.user.nama }} · username/NIS {{ passwordSiswa.user.username || passwordSiswa.user.nis }}</p>
+          </div>
+          <button type="button" class="impor-close" aria-label="Tutup" :disabled="passwordSiswa.loading" @click="tutupAturPassword">×</button>
+        </div>
+        <form class="impor-body" autocomplete="off" @submit.prevent="simpanPasswordSiswa">
+          <p class="impor-note">Buat password sementara minimal 8 karakter dan berikan secara pribadi kepada siswa. Password tidak dapat dilihat kembali setelah disimpan.</p>
+          <label class="password-field">
+            <span>Password sementara</span>
+            <input v-model="passwordSiswa.password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required />
+          </label>
+          <label class="password-field">
+            <span>Ulangi password sementara</span>
+            <input v-model="passwordSiswa.konfirmasi" type="password" minlength="8" maxlength="72" autocomplete="new-password" required />
+          </label>
+          <p v-if="passwordSiswa.error" class="impor-error" role="alert">{{ passwordSiswa.error }}</p>
+          <footer class="impor-actions">
+            <button type="button" class="impor-cancel" :disabled="passwordSiswa.loading" @click="tutupAturPassword">Batal</button>
+            <button type="submit" class="impor-primary" :disabled="passwordSiswa.loading">
+              {{ passwordSiswa.loading ? 'Menyimpan…' : 'Simpan password' }}
+            </button>
+          </footer>
+        </form>
       </section>
     </div>
     <FormAkunModal v-if="formOn" @tutup="formOn = false" @berhasil="akunBaru" />
@@ -226,6 +262,7 @@ export default {
       requestInProgress: false,
       userError: '',
       importExcel: { buka: false, namaFile: '', baris: [], pratinjau: null, hasil: null, loading: false, error: '' },
+      passwordSiswa: { buka: false, user: null, password: '', konfirmasi: '', loading: false, error: '' },
       refreshTimer: null,
       toastTimer: null
     }
@@ -307,6 +344,35 @@ export default {
       }
     },
     akunSiswaKelas(k) { return this.akunSiswa.filter((user) => user.kelas === k) },
+    bukaAturPassword(user) {
+      this.passwordSiswa = { buka: true, user, password: '', konfirmasi: '', loading: false, error: '' }
+    },
+    tutupAturPassword() {
+      if (this.passwordSiswa.loading) return
+      this.passwordSiswa = { buka: false, user: null, password: '', konfirmasi: '', loading: false, error: '' }
+    },
+    async simpanPasswordSiswa() {
+      const state = this.passwordSiswa
+      state.error = ''
+      if (state.password.length < 8) { state.error = 'Password sementara minimal 8 karakter.'; return }
+      if (state.password !== state.konfirmasi) { state.error = 'Konfirmasi password tidak sama.'; return }
+      state.loading = true
+      try {
+        await api.aturPasswordSiswa(state.user.id, state.password, state.konfirmasi)
+        this.users = this.users.map((user) => user.id === state.user.id
+          ? { ...user, password_terpasang: true, wajib_ganti_password: true }
+          : user)
+        state.loading = false
+        this.tutupAturPassword()
+        this.toast = { pesan: 'Password sementara tersimpan. Siswa wajib menggantinya saat login pertama.' }
+        window.clearTimeout(this.toastTimer)
+        this.toastTimer = window.setTimeout(this.tutupToast, 5000)
+      } catch (error) {
+        state.error = error.message || 'Password siswa tidak dapat disimpan.'
+      } finally {
+        state.loading = false
+      }
+    },
     bukaImportExcel() {
       this.importExcel = { buka: true, namaFile: '', baris: [], pratinjau: null, hasil: null, loading: false, error: '' }
     },
@@ -370,16 +436,14 @@ export default {
         this.importExcel.loading = false
       }
     },
-    unduhKredensialExcel() {
+    unduhKredensialOrtu() {
       if (!this.importExcel.hasil) return
-      const rows = [['nama_siswa', 'kelas', 'nis', 'username_siswa', 'password_siswa', 'nama_ortu', 'username_ortu', 'password_ortu']]
+      const rows = [['nama_siswa', 'kelas', 'nis', 'nama_ortu', 'username_ortu', 'password_ortu']]
       for (const account of this.importExcel.hasil.akun) {
         rows.push([
           account.nama_siswa,
           account.kelas,
           account.nis,
-          account.username_siswa,
-          account.password_siswa,
           account.nama_ortu,
           account.username_ortu,
           account.password_ortu
@@ -388,7 +452,7 @@ export default {
       const url = URL.createObjectURL(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = 'kredensial-akun-siswa-RAHASIA.csv'
+      link.download = 'kredensial-akun-orang-tua-RAHASIA.csv'
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -479,6 +543,13 @@ export default {
 .nama b { display: block; font: 600 13px var(--font-body); }
 .nama i { display: block; font: 400 11px var(--font-body); color: var(--muted); font-style: normal; margin-top: 1px; }
 .muted { font: 400 12.5px var(--font-body); color: var(--muted); }
+.status-siswa { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.status-password { color: var(--muted); font: 400 10.5px/1.3 var(--font-body); }
+.btn-password { border: 0; border-radius: var(--r-sm); padding: 5px 8px; background: var(--blue-soft); color: var(--blue); font: 600 10.5px var(--font-body); cursor: pointer; }
+.btn-password:hover { background: var(--blue); color: #fff; }
+.password-field { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font: 500 12px var(--font-body); }
+.password-field input { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 11px 12px; color: var(--ink); font: 500 14px var(--font-body); outline: none; }
+.password-field input:focus { border-color: var(--blue); }
 
 .impor-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 18px; background: rgba(10, 13, 59, .52); }
 .impor-modal { width: min(760px, 100%); max-height: min(88vh, 900px); overflow: auto; border-radius: var(--r-lg, 18px); background: #fff; box-shadow: 0 24px 70px #0003; }
@@ -501,6 +572,7 @@ export default {
 .impor-error { margin: 0; font: 500 12px/1.5 var(--font-body); }
 .impor-ok { margin: 0; color: var(--green); font: 600 13px/1.5 var(--font-body); }
 .impor-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--line); }
+.password-modal .impor-actions { margin: 4px -22px -20px; }
 .impor-cancel, .impor-primary { border-radius: var(--r-sm); padding: 10px 14px; font: 600 12px var(--font-body); cursor: pointer; }
 .impor-cancel { border: 1px solid var(--line); background: #fff; color: var(--ink); }
 .impor-primary { border: 0; background: var(--blue); color: #fff; }

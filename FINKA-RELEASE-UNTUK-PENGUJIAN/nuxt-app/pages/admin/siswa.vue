@@ -191,7 +191,7 @@ definePageMeta({
         <h2 class="display" style="font-size: 18px; margin-bottom: 4px;">Impor siswa + orang tua dari CSV</h2>
 
         <template v-if="impor.tahap !== 'selesai'">
-          <p class="ket" style="margin-bottom: 10px;">Satu baris = satu siswa. Kolom: <b>nama_siswa, nis, kelas, nama_ortu</b>, dan opsional <b>username_ortu</b> (isi sama untuk kakak-adik agar berbagi satu akun orang tua; kosong = otomatis <i>ortu.NIS</i>). Maksimal 300 baris per file. Simpan dari Excel sebagai <i>CSV</i> dan format kolom NIS sebagai Teks.</p>
+          <p class="ket" style="margin-bottom: 10px;">Satu baris = satu siswa. Kolom wajib: <b>nama_siswa, nis, kelas, password_siswa, nama_ortu, password_ortu</b>. Kedua password minimal 8 karakter. Kakak-adik dalam satu akun wali harus memakai password_ortu yang sama. Jika <b>username_ortu</b> diisi dengan akun wali yang sudah ada, password_ortu boleh kosong dan password lama tidak diubah. Password awal menjadi sementara; santri wajib menggantinya saat login pertama lalu membuat PIN. Maksimal 300 baris. Simpan sebagai <i>CSV</i>, format NIS sebagai Teks, dan jaga kerahasiaan file.</p>
           <div class="impor-aksi">
             <button type="button" class="btn-sm btn-sm--link" @click="unduhTemplat">Unduh templat</button>
             <input type="file" accept=".csv,text/csv,.txt" class="input" @change="pilihFileImpor" />
@@ -201,10 +201,9 @@ definePageMeta({
 
           <div v-if="impor.pratinjau">
             <p class="impor-ringkas">
-              <b>{{ impor.namaFile }}</b> · {{ impor.pratinjau.total }} baris ·
+              <b>{{ impor.namaFile }}</b> · {{ impor.pratinjau.baris.length }} baris ·
               <span class="rel-chip ok">{{ impor.pratinjau.valid }} valid</span>
               <span v-if="impor.pratinjau.jumlah_error" class="rel-chip warn">{{ impor.pratinjau.jumlah_error }} salah</span>
-              · akun orang tua baru {{ impor.pratinjau.ortu_baru }}<span v-if="impor.pratinjau.ortu_dipakai_ulang">, dipakai ulang {{ impor.pratinjau.ortu_dipakai_ulang }}</span>
             </p>
             <div class="card-table" style="max-height: 260px; overflow: auto;">
               <table>
@@ -212,7 +211,7 @@ definePageMeta({
                 <tbody>
                   <tr v-for="b in barisTampil" :key="b.no">
                     <td>{{ b.no }}</td><td>{{ b.nama_siswa }}</td><td>{{ b.nis }}</td><td>{{ b.kelas }}</td><td>{{ b.nama_ortu }} <span class="rel-muted">({{ b.username_ortu }})</span></td>
-                    <td><span v-if="b.error.length" class="error-text">{{ b.error.join('; ') }}</span><span v-else class="rel-muted">{{ b.ortu_status === 'ada' ? 'dihubungkan ke akun orang tua yang sudah ada' : 'OK' }}</span></td>
+                    <td><span v-if="b.error" class="error-text">{{ b.error }}</span><span v-else class="rel-muted">Siap</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -228,11 +227,12 @@ definePageMeta({
 
         <template v-else>
           <div class="success-box">
-            <p class="pin-note">Berhasil: <b>{{ impor.hasil.siswa_dibuat }}</b> siswa, <b>{{ impor.hasil.ortu_dibuat }}</b> akun orang tua baru<span v-if="impor.hasil.ortu_dipakai_ulang">, {{ impor.hasil.ortu_dipakai_ulang }} akun orang tua lama dihubungkan</span>.<br>
-              <span><b>Unduh daftar akun sekarang.</b> Password sementara hanya ditampilkan sekali dan tidak bisa dilihat lagi. File berisi data rahasia: bagikan per keluarga, jangan dikirim ke grup, dan hapus setelah dibagikan. Siswa dan Orang Tua membuat PIN sendiri saat pertama kali masuk.</span></p>
+            <p class="pin-note">Berhasil: <b>{{ impor.hasil.jumlah }}</b> akun siswa didaftarkan.<br>
+              <span>Password sementara sudah diatur dari file. Siswa login memakai nama atau NIS dan password masing-masing, lalu wajib mengganti password saat login pertama dan membuat PIN baru.</span><br>
+              <span>File unduhan hanya berisi kredensial akun orang tua yang baru dibuat. Bagikan per keluarga, jangan dikirim ke grup, dan hapus setelah dibagikan.</span></p>
           </div>
           <div class="modal-actions" style="margin-top: 14px;">
-            <button type="button" class="btn btn--primary" @click="unduhKredensial">Unduh daftar akun (CSV)</button>
+            <button type="button" class="btn btn--primary" @click="unduhKredensial">Unduh kredensial orang tua (CSV)</button>
             <button type="button" class="btn" style="background: var(--line);" @click="tutupImpor">Selesai</button>
           </div>
         </template>
@@ -938,9 +938,9 @@ export default {
       await this.kirimImpor(true)
     },
     unduhKredensial() {
-      const k = [['nama_siswa', 'kelas', 'nis', 'username_siswa', 'password_siswa', 'nama_ortu', 'username_ortu', 'password_ortu']]
-      for (const a of this.impor.hasil.akun) k.push([a.nama_siswa, a.kelas, a.nis, a.username_siswa, a.password_siswa, a.nama_ortu, a.username_ortu, a.password_ortu || '(akun lama, password tidak diubah)'])
-      this.unduhBerkas('akun-siswa-ortu-RAHASIA.csv', toCsv(k))
+      const k = [['nama_siswa', 'kelas', 'nis', 'nama_ortu', 'username_ortu', 'password_ortu']]
+      for (const a of this.impor.hasil.akun) k.push([a.nama_siswa, a.kelas, a.nis, a.nama_ortu, a.username_ortu, a.password_ortu || '(akun lama, password tidak diubah)'])
+      this.unduhBerkas('akun-orang-tua-RAHASIA.csv', toCsv(k))
     },
     bukaKelas() { this.kls = { buka: true, mode: 'naik', pemetaan: [{ dari: '', ke: '' }], naikHasil: null, arsipKelas: '', arsipHasil: null, akuiSaldo: false, loading: false, error: '', sukses: '' } },
     async periksaNaik() {
