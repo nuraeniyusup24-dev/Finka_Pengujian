@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment (rahasia) - hanya .env.example yang boleh masuk Git
+.env
+.env.*
+!.env.example
+
+# Database lokal & log
+finka.db
+finka.db-wal
+finka.db-shm
+*.sqlite
+*.sqlite3
+*.db
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Data SQLite lokal
+data/

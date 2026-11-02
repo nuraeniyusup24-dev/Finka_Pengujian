@@ -1,0 +1,95 @@
+<script setup>
+definePageMeta({
+  layout: 'phone',
+  middleware: ['auth', 'siswa']
+})
+</script>
+
+<template>
+  <div class="wrap">
+    <ScreenHeader title="Struk Digital" to="/siswa/riwayat" dark />
+    <div v-if="$store.state['profil-siswa'].memuat" class="state">Memuat detail transaksi…</div>
+    <div v-else-if="$store.state['profil-siswa'].error" class="state error" role="alert">{{ $store.state['profil-siswa'].error }} <button type="button" @click="muat">Coba lagi</button></div>
+    <div v-else-if="!trx" class="state">Detail transaksi tidak ditemukan.</div>
+    <div v-else-if="trx" class="sheet">
+      <div class="brand"><span class="brand__mark">F</span><span class="display">Finka</span><i>STRUK DIGITAL</i></div>
+      <div class="head">
+        <div class="cek">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+        </div>
+        <div class="status">TRANSAKSI BERHASIL</div>
+        <div class="judul display">{{ trx.judul }}</div>
+        <div class="nominal display num">{{ Math.abs(trx.nominal) | rp }}</div>
+        <div class="waktu">{{ trx.hari }} · {{ jam }} WIB</div>
+      </div>
+
+      <div class="putus"></div>
+      <div class="meta">
+        <div v-if="row.keterangan"><span>Keterangan</span><b>{{ row.keterangan }}</b></div>
+        <div v-if="row.oleh_nama"><span>Diproses oleh</span><b>{{ row.oleh_nama }}</b></div>
+        <div v-if="row.sisa !== null && row.sisa !== undefined"><span>Saldo sebelum</span><b class="num">{{ sebelum | rp }}</b></div>
+        <div v-if="row.sisa !== null && row.sisa !== undefined"><span>Saldo sesudah</span><b class="num">{{ row.sisa | rp }}</b></div>
+      </div>
+
+      <div class="putus"></div>
+      <div class="meta meta--reference">
+        <div><span>ID transaksi</span><b class="num">{{ idTrx }}</b></div>
+        <div><span>Metode</span><b>Pembayaran Finka</b></div>
+      </div>
+      <button class="cetak" @click="cetak">Cetak / simpan sebagai PDF</button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+
+
+  computed: {
+    row() { return this.$store.state['profil-siswa'].riwayat.find((x) => Number(x.id) === Number(this.$route.params.id)) || null },
+    trx() {
+      if (!this.row) return null
+      const w = this.$store.getters['profil-siswa/transaksi'].find((x) => Number(x.id) === Number(this.row.id))
+      return w ? Object.assign({}, w, { hari: w.tanggalLabel }) : null
+    },
+    jam() { return this.trx ? this.trx.meta.split(' · ')[0] : '' },
+    sebelum() { return this.trx ? this.trx.sisa - this.trx.nominal : 0 },
+    idTrx() { return this.trx ? 'TRX-' + this.trx.id : '' }
+  },
+  methods: {
+    cetak() { window.print() },
+    muat() { return this.$store.dispatch('profil-siswa/muat') }
+  },
+  async mounted() { await this.$store.dispatch('profil-siswa/muat') }
+}
+</script>
+
+<style scoped>
+.wrap { flex: 1; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; }
+.sheet { flex: 1; width: min(100%, 440px); align-self: center; box-sizing: border-box; background: #fff; border-radius: 24px 24px 0 0; padding: 24px 22px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 8px 32px rgba(10,13,59,.08); }
+.state { padding:32px 20px; text-align:center; color:var(--muted); font:500 13px/1.5 var(--font-body); }
+.error { color:var(--coral); }
+.state button { border:0; background:transparent; color:var(--blue); font-weight:700; cursor:pointer; }
+.brand { display:flex; align-items:center; gap:8px; color:var(--navy); font:700 15px var(--font-display); }
+.brand__mark { width:27px; height:27px; border-radius:9px; display:grid; place-items:center; background:var(--blue); color:#fff; font:800 14px var(--font-display); }
+.brand i { margin-left:auto; color:var(--muted); font:600 9px var(--font-body); letter-spacing:.12em; font-style:normal; }
+.head { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.cek { width: 48px; height: 48px; border-radius: var(--r-pill); background: rgba(26,128,64,.12); display: flex; align-items: center; justify-content: center; }
+.status { color:var(--green); font:700 10px var(--font-body); letter-spacing:.12em; }
+.judul { font: 700 16px var(--font-display); }
+.nominal { font: 800 32px var(--font-display); letter-spacing: -.03em; }
+.waktu { font: 400 12px var(--font-body); color: var(--muted); }
+.putus { border-top: 1px dashed var(--line); margin:0 -4px; }
+.meta { display: flex; flex-direction: column; gap: 9px; }
+.meta div { display: flex; justify-content: space-between; align-items:flex-start; gap:14px; }
+.meta span { font: 400 12.5px var(--font-body); color: var(--muted); }
+.meta b { font: 600 12.5px var(--font-body); text-align:right; overflow-wrap:anywhere; }
+.meta--reference { background:var(--bg); border-radius:var(--r-sm); padding:12px; }
+.cetak { margin-top: auto; border: 1px solid var(--line); background: #fff; color:var(--blue); border-radius: var(--r-pill); padding: 13px; font: 700 13px var(--font-body); cursor: pointer; }
+.cetak:hover { background:var(--blue-soft); border-color:var(--blue); }
+@media print {
+  :global(body), .wrap { background:#fff !important; }
+  .cetak, :global(.phone-header) { display: none !important; }
+  .sheet { width:100%; min-height:0; border-radius:0; padding:12mm; box-shadow:none; }
+}
+</style>

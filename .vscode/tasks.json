@@ -1,0 +1,27 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Validate admin import endpoint",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--test",
+				"FINKA-RELEASE-UNTUK-PENGUJIAN\\backend\\test\\admin-import-verification.test.js"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build Finka frontend",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"set NUXT_IGNORE_LOCK=1 && cd /d FINKA-RELEASE-UNTUK-PENGUJIAN\\nuxt-app && npm run build"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "finka-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test test/*.test.js",
+    "test:pin-recovery": "node test/pin-recovery.test.js",
+    "smoke-test": "node scripts/smoke-test.js",
+    "db:setup": "node scripts/init-db.js",
+    "db:init": "node scripts/init-db.js",
+    "db:backup": "node scripts/db-backup.js",
+    "db:restore": "node scripts/db-restore.js",
+    "admin:provision": "node scripts/provision-admin.js",
+    "test:static": "node scripts/static-check.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
