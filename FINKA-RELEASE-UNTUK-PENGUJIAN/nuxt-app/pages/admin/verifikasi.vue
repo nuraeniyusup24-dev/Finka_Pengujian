@@ -68,7 +68,7 @@ definePageMeta({
           <div class="hero__eyebrow">COCOKKAN DENGAN TRANSFER YANG DITERIMA</div>
           <div class="hero__angka">
             <span class="hero__rp display">Rp</span>
-            <span class="display num">{{ transfer | num }}</span>
+            <span class="display num">{{ $num(transfer) }}</span>
           </div>
           <div class="hero__rows">
             <div><span>Nominal dasar</span><b class="num">{{ pilih.dasar | rp }}</b></div>

@@ -35,7 +35,7 @@ definePageMeta({
               class="chip num"
               :class="n === limit ? 'chip--on' : ''"
               @click="setLimit(n)"
-            >{{ n | num }}</button>
+            >{{ $num(n) }}</button>
           </div>
           <div>
             <div class="bar"><i :style="'width:' + pakaiPct + '%'"></i></div>

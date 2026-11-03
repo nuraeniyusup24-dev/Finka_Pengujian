@@ -27,7 +27,7 @@ definePageMeta({
             class="chip num"
             :class="tunai === n ? 'chip--on' : ''"
             @click="set(n)"
-          >{{ n | num }}</button>
+          >{{ $num(n) }}</button>
         </div>
       </div>
 

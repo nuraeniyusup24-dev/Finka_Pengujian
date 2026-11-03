@@ -191,8 +191,8 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
               } while (await db.prepare('SELECT id FROM users WHERE username = ?').get(username))
             }
             const password = row.password_ortu
-            const created = await db.prepare(`INSERT INTO users (username, password_hash, nama, role, outlet, active)
-              VALUES (?, ?, ?, 'ortu', NULL, 1)`)
+            const created = await db.prepare(`INSERT INTO users (username, password_hash, nama, role, outlet, active, must_change_password)
+              VALUES (?, ?, ?, 'ortu', NULL, 1, 1)`)
               .run(username, bcrypt.hashSync(password, 10), row.nama_ortu)
             parent = { id: Number(created.lastInsertRowid), username, nama: row.nama_ortu, password }
             await audit(req, 'BUAT_AKUN', `ortu · ${row.nama_ortu} · impor siswa`, 'users', parent.id)

@@ -10,8 +10,8 @@
       </div>
     </div>
     <div class="kanan">
-      <div class="nominal num" :class="masuk ? 'nominal--in' : ''">{{ masuk ? '+' : '−' }} {{ Math.abs(trx.nominal) | num }}</div>
-      <div v-if="showSisa" class="sisa num">sisa {{ trx.sisa | num }}</div>
+      <div class="nominal num" :class="masuk ? 'nominal--in' : ''">{{ masuk ? '+' : '−' }} {{ $num(Math.abs(trx.nominal)) }}</div>
+      <div v-if="showSisa" class="sisa num">sisa {{ $num(trx.sisa) }}</div>
     </div>
   </nuxt-link>
 </template>
@@ -58,4 +58,3 @@ export default {
 .nominal--in { color: var(--green); }
 .sisa { font: 400 11px var(--font-body); color: var(--muted); margin-top: 1px; }
 </style>
-

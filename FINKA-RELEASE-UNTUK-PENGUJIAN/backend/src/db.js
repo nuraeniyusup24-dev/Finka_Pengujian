@@ -404,6 +404,24 @@ export async function initDb() {
     await db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK(must_change_password IN (0,1))')
   }
 
+  await db.exec(`UPDATE users
+    SET must_change_password = 1
+    WHERE role = 'ortu'
+      AND must_change_password = 0
+      AND EXISTS (
+        SELECT 1 FROM audit_log a
+        WHERE a.aksi = 'BUAT_AKUN'
+          AND a.ref_tabel = 'users'
+          AND a.ref_id = users.id
+          AND a.perubahan LIKE '%impor siswa'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM audit_log a
+        WHERE a.ref_tabel = 'users'
+          AND a.ref_id = users.id
+          AND a.aksi IN ('GANTI_PASSWORD', 'RESET_PASSWORD_MANDIRI')
+      )`)
+
   // Backfill transaksi POS lama supaya riwayat sebelum upgrade juga bisa dibatalkan
   // dan direkonsiliasi. Ledger tetap menjadi sumber saldo; tabel ini hanya metadata.
   await db.exec(`INSERT INTO pos_transaction_meta (ledger_id, pic_id, outlet, tipe_asal, total, created_at)

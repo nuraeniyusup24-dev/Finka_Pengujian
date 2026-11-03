@@ -15,7 +15,7 @@ definePageMeta({
         </div>
         <div class="hero__angka">
           <span class="hero__rp display">Rp</span>
-          <span class="display num">{{ transfer | num }}</span>
+          <span class="display num">{{ $num(transfer) }}</span>
         </div>
         <p class="hero__ket">
           Total transfer harus tepat. Terdiri dari nominal dasar <b>Rp {{ dasarStr }}</b> dan kode unik <b>{{ kodeStr }}</b>.

@@ -33,10 +33,13 @@ export default {
 
 <style scoped>
 .tabbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
   display: flex;
   background: #fff;
   border-top: 1px solid var(--line);
-  padding: 10px 8px 22px;
+  padding: 10px 8px calc(22px + env(safe-area-inset-bottom, 0px));
   flex: none;
 }
 .tab {
@@ -52,4 +55,3 @@ export default {
 .tab:hover { color: var(--muted); }
 .tab--on, .tab--on:hover { color: var(--blue); }
 </style>
-

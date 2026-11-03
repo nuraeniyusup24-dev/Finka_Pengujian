@@ -74,11 +74,60 @@ test('admin dapat mengimpor akun siswa dan memverifikasi pembayaran secara massa
   assert.equal(imported.body.akun[0].username_ortu, imported.body.akun[1].username_ortu)
   assert.equal(imported.body.akun[0].password_ortu, 'ParentPass-001!')
   assert.equal(imported.body.akun[1].password_ortu, 'ParentPass-001!')
-  const importedParent = await db.prepare('SELECT password_hash FROM users WHERE username = ?').get(imported.body.akun[0].username_ortu)
+  const importedParent = await db.prepare('SELECT password_hash, pin_hash, must_change_password FROM users WHERE username = ?').get(imported.body.akun[0].username_ortu)
   assert.ok(await bcrypt.compare('ParentPass-001!', importedParent.password_hash))
+  assert.equal(importedParent.pin_hash, null)
+  assert.equal(Number(importedParent.must_change_password), 1)
   const parentToken = await login(baseUrl, imported.body.akun[0].username_ortu, 'ParentPass-001!')
   const parentProfile = await getApi(baseUrl, parentToken, '/api/auth/me')
   assert.equal(parentProfile.body.user.role, 'ortu')
+  assert.equal(parentProfile.body.user.wajib_ganti_password, true)
+  assert.equal(parentProfile.body.user.wajib_buat_pin, true)
+  const parentPinBeforePasswordChange = await api(baseUrl, parentToken, '/api/auth/me/pin', {
+    pin: '864210',
+    konfirmasi_pin: '864210'
+  })
+  assert.equal(parentPinBeforePasswordChange.response.status, 403)
+  assert.match(parentPinBeforePasswordChange.body.error, /Ganti password sementara/)
+  const parentPasswordChanged = await api(baseUrl, parentToken, '/api/auth/ganti-password', {
+    password_lama: 'ParentPass-001!',
+    password_baru: 'parent-password-2'
+  })
+  assert.equal(parentPasswordChanged.response.status, 200, JSON.stringify(parentPasswordChanged.body))
+  const parentProfileAfterPasswordChange = await getApi(baseUrl, parentToken, '/api/auth/me')
+  assert.equal(parentProfileAfterPasswordChange.body.user.wajib_ganti_password, false)
+  assert.equal(parentProfileAfterPasswordChange.body.user.wajib_buat_pin, true)
+  const parentPinCreated = await api(baseUrl, parentToken, '/api/auth/me/pin', {
+    pin: '864210',
+    konfirmasi_pin: '864210'
+  })
+  assert.equal(parentPinCreated.response.status, 200, JSON.stringify(parentPinCreated.body))
+  const parentProfileAfterPin = await getApi(baseUrl, parentToken, '/api/auth/me')
+  assert.equal(parentProfileAfterPin.body.user.wajib_ganti_password, false)
+  assert.equal(parentProfileAfterPin.body.user.wajib_buat_pin, false)
+  await login(baseUrl, imported.body.akun[0].username_ortu, 'parent-password-2')
+
+  const legacyImport = await api(baseUrl, adminToken, '/api/admin/impor-siswa', {
+    baris: [{
+      no: 2,
+      nama_siswa: 'Siswa Uji Legacy',
+      nis: 'TEST-IMPORT-LEGACY',
+      kelas: '7C',
+      password_siswa: 'ExcelPass-Legacy!',
+      nama_ortu: 'Orang Tua Legacy',
+      username_ortu: '',
+      password_ortu: 'ParentPass-Legacy!'
+    }],
+    simpan: true
+  })
+  assert.equal(legacyImport.response.status, 201, JSON.stringify(legacyImport.body))
+  const legacyParent = await db.prepare('SELECT id FROM users WHERE username = ?').get(legacyImport.body.akun[0].username_ortu)
+  await db.prepare('UPDATE users SET must_change_password = 0 WHERE id = ?').run(legacyParent.id)
+  await initDb()
+  const legacyParentAfterMigration = await db.prepare('SELECT must_change_password FROM users WHERE id = ?').get(legacyParent.id)
+  assert.equal(Number(legacyParentAfterMigration.must_change_password), 1)
+  const changedParentAfterMigration = await db.prepare('SELECT must_change_password FROM users WHERE username = ?').get(imported.body.akun[0].username_ortu)
+  assert.equal(Number(changedParentAfterMigration.must_change_password), 0)
 
   for (const account of imported.body.akun) {
     const user = await db.prepare('SELECT password_hash, pin_hash, must_change_password FROM users WHERE username = ?').get(account.username_siswa)

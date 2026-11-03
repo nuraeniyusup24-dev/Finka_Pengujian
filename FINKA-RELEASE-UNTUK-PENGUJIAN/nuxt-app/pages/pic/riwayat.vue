@@ -25,8 +25,8 @@ definePageMeta({
               <div class="meta">{{ t.meta }}</div>
             </div>
             <div class="kanan">
-              <div class="nominal num">− {{ Math.abs(t.nominal) | num }}</div>
-              <div v-if="t.sisa !== null" class="sisa num">sisa {{ t.sisa | num }}</div>
+              <div class="nominal num">− {{ $num(Math.abs(t.nominal)) }}</div>
+              <div v-if="t.sisa !== null" class="sisa num">sisa {{ $num(t.sisa) }}</div>
             </div>
           </div>
         </div>

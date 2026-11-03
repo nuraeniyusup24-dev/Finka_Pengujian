@@ -73,7 +73,7 @@ definePageMeta({
               class="chip num"
               :class="draft.nominal === n ? 'chip--on' : ''"
               @click="patch({ nominal: n })"
-            >{{ n | num }}</button>
+            >{{ $num(n) }}</button>
           </div>
         </section>
         <section>
@@ -176,7 +176,7 @@ definePageMeta({
       <div class="card ringkas">
         <div class="h display">Ringkasan penerbitan</div>
         <div class="ringkas__row"><span>Penerima</span><b>{{ penerimaLabel }}</b></div>
-        <div class="ringkas__row"><span>Jumlah siswa</span><b class="num">{{ jumlah | num }} siswa</b></div>
+        <div class="ringkas__row"><span>Jumlah siswa</span><b class="num">{{ $num(jumlah) }} siswa</b></div>
         <div class="ringkas__row"><span>Nominal per siswa</span><b class="num">{{ draft.nominal | rp }}</b></div>
         <div class="garis"></div>
         <div class="ringkas__total"><span>Total diterbitkan</span><b class="display num">{{ total | rp }}</b></div>

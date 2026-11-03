@@ -164,7 +164,7 @@ definePageMeta({
             <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="importExcel.loading" @change="pilihFileExcel" />
           </label>
           <p class="impor-note">Kolom wajib: nama_siswa, nis, kelas, password_siswa, nama_ortu, password_ortu. Password siswa dan orang tua minimal 8 karakter. Untuk kakak-adik dalam satu akun wali, gunakan password_ortu yang sama. username_ortu opsional; isi untuk menghubungkan akun wali yang sudah ada (password_ortu boleh dikosongkan dan tidak mengubah password lama). Maksimal 300 siswa dan 3 MB per file.</p>
-          <p class="impor-note">Siswa dapat login menggunakan nama lengkap atau NIS dan password dari Excel. Pada login pertama, siswa wajib mengganti password sementara lalu membuat PIN baru. Simpan file Excel dengan aman karena berisi password.</p>
+          <p class="impor-note">Siswa login menggunakan nama lengkap atau NIS dan password dari Excel. Saat login pertama, siswa wajib mengganti password sementara lalu membuat PIN pembayaran. Orang tua/wali yang akunnya baru dibuat juga wajib mengganti password sementara dan membuat PIN konfirmasi. Jika username_ortu menghubungkan akun yang sudah ada, gunakan password akun tersebut; password lama tidak diubah. Simpan file Excel dengan aman karena berisi password.</p>
           <p v-if="importExcel.namaFile" class="impor-filename">{{ importExcel.namaFile }}</p>
           <p v-if="importExcel.error" class="impor-error" role="alert">{{ importExcel.error }}</p>
           <div v-if="importExcel.pratinjau" class="impor-preview">
@@ -191,7 +191,7 @@ definePageMeta({
         </div>
         <div v-else class="impor-body">
           <p class="impor-ok">{{ importExcel.hasil.jumlah }} akun siswa berhasil dibuat dan terhubung ke akun orang tua.</p>
-          <p class="impor-note">Password awal setiap siswa sudah diatur dari Excel. Siswa login menggunakan nama lengkap atau NIS dan password pada file, lalu wajib mengganti password pada login pertama sebelum membuat PIN pembayaran.</p>
+          <p class="impor-note">Siswa dan orang tua/wali dengan akun baru login memakai kredensial dari Excel dan wajib mengganti password sementara saat pertama masuk, lalu membuat PIN masing-masing. PIN siswa dipakai untuk pembayaran di kantin/koperasi; PIN orang tua dipakai untuk konfirmasi isi saldo dan pembayaran tagihan. Akun orang tua yang sudah ada tetap memakai password lama dan tidak diubah oleh impor.</p>
           <p class="impor-note">Simpan file Excel dengan aman dan bagikan kredensial hanya kepada pemilik akun. File unduhan terpisah hanya berisi kredensial akun orang tua yang baru dibuat.</p>
         </div>
         <footer class="impor-actions">

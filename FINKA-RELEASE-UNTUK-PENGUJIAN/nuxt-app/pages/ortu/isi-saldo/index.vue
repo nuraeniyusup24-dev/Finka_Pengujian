@@ -38,7 +38,7 @@ definePageMeta({
             class="chip num"
             :class="n === nominal ? 'chip--on' : ''"
             @click="nominal = n"
-          >{{ n | num }}</button>
+          >{{ $num(n) }}</button>
         </div>
       </div>
 

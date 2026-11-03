@@ -2,7 +2,7 @@
 
 ## 1. Siapkan perangkat
 
-Pasang Node.js versi 22.13 atau lebih baru untuk backend. Untuk Nuxt 4.6.3, gunakan Node.js `^22.22.3 || ^24.15.0 || >=26.0.0` (Node 24.15+ disarankan). **PostgreSQL tidak diperlukan**: backend memakai SQLite yang sudah ada di dalam Node.js. Buka PowerShell pada folder hasil ekstrak ZIP.
+Pasang Node.js `^22.22.3`, `^24.15.0`, atau `>=26.0.0` agar satu versi kompatibel dengan frontend Nuxt 4.6.3 dan backend. Periksa versi di PowerShell dengan `node --version`; versi di luar rentang tersebut belum didukung meskipun sebagian perintah mungkin berjalan. **PostgreSQL tidak diperlukan**: backend memakai SQLite yang sudah ada di dalam Node.js. Buka PowerShell pada folder hasil ekstrak ZIP.
 
 ## 2. Atur backend
 

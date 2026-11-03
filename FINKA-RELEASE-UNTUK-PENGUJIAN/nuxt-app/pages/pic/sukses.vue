@@ -35,7 +35,7 @@ definePageMeta({
       <button class="btn btn--primary" @click="lagi">Transaksi berikutnya</button>
     </div>
 
-    <!-- Struk thermal 58 mm: hanya tampil saat dicetak -->
+    <!-- Struk thermal 80 mm: hanya tampil saat dicetak -->
     <div v-if="snapshot" class="print-struk">
       <header class="struk-brand">
         <div class="struk-logo">FINKA</div>
@@ -146,7 +146,7 @@ export default {
 .struk-footer { margin-top: 9px; line-height: 1.45; }
 
 @media print {
-  @page { size: 80mm 140mm; margin: 0; }
+  @page { size: 80mm 110mm; margin: 0; }
   :global(html), :global(body), :global(#__nuxt), :global(#__layout) {
     width: 80mm !important;
     min-width: 80mm !important;
@@ -164,12 +164,19 @@ export default {
   .print-struk {
     display: block !important;
     position: static;
-    width: 80mm;
+    width: 80mm !important;
+    max-width: 80mm !important;
     box-sizing: border-box;
-    padding: 6mm;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 4mm;
     background: #fff;
     color: #111;
     font: 10.5px/1.45 Arial, sans-serif;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
 </style>
