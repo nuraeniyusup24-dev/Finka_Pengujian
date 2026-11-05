@@ -19,8 +19,8 @@ definePageMeta({
     <header class="head">
       <div>
         <div class="logo">
-          <svg width="20" height="22" viewBox="0 0 40 44" fill="var(--blue)" aria-hidden="true"><rect x="13" y="0" width="27" height="14" rx="6" /><rect x="0" y="10" width="14" height="14" rx="6" /><rect x="9" y="15" width="24" height="14" rx="6" /><rect x="4" y="30" width="14" height="14" rx="6" /></svg>
-          <span class="display">Finka</span>
+          <FinkaMark :width="20" :height="22" color="var(--blue)" />
+          <span class="display">FINKA</span>
         </div>
         <div class="outlet display">{{ info.nama }}</div>
         <div class="sesi">Sesi {{ info.sesi }}</div>
@@ -118,7 +118,13 @@ export default {
   },
   computed: {
     outlet() { return this.$store.state.pos.outlet },
-    info() { return OUTLET_INFO[this.outlet] || OUTLET_INFO[0] },
+    info() {
+      return OUTLET_INFO[this.outlet] || {
+        nama: this.$store.state.auth.user && this.$store.state.auth.user.outlet || 'Outlet',
+        kasir: this.$store.state.auth.user && this.$store.state.auth.user.nama || 'Kasir',
+        sesi: this.$store.state.auth.user && this.$store.state.auth.user.outlet || 'Outlet'
+      }
+    },
     cart() { return this.$store.state.pos.cart },
     produk() { return this.$store.getters.produkOutlet(this.outlet) },
     total() { return this.$store.getters['pos/totalBelanja'] },
@@ -151,8 +157,8 @@ export default {
       try {
         const data = await api.produk()
         if (!data.outlet) throw new Error('Outlet akun PIC belum diatur oleh Admin.')
-        const outlet = OUTLET_KEYS.indexOf(String(data.outlet))
-        if (outlet < 0) throw new Error('Outlet akun PIC tidak dikenali. Hubungi Admin.')
+        const outletIndex = OUTLET_KEYS.indexOf(String(data.outlet))
+        const outlet = outletIndex < 0 ? OUTLET_KEYS.length : outletIndex
         this.$store.commit('setProduk', (data.produk || []).map((p) => Object.assign({}, p, { outlet })))
         this.$store.commit('pos/setOutlet', outlet)
       } catch (error) {
@@ -201,7 +207,7 @@ export default {
 <style scoped>
 .wrap { position: relative; flex: 1; display: flex; flex-direction: column; background: #fff; min-height: 0; }
 .head { padding: 8px 18px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
-.logo { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--ink); font: 800 16px var(--font-display); }
+.logo { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--ink); font: 800 16px var(--font-display); letter-spacing: .04em; }
 .outlet { font: 700 15px var(--font-display); }
 .sesi { font: 400 11.5px var(--font-body); color: var(--muted); margin-top: 2px; }
 .kanan { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }

@@ -46,7 +46,10 @@ export default {
   async mounted() { await this.muat() },
   computed: {
     outlet() { return this.$store.state.pos.outlet },
-    namaOutlet() { return (OUTLET_INFO[this.outlet] || OUTLET_INFO[0]).nama },
+    namaOutlet() {
+      const info = OUTLET_INFO[this.outlet]
+      return info ? info.nama : (this.$store.state.auth.user && this.$store.state.auth.user.outlet || 'Outlet')
+    },
     trxOutlet() {
       return this.riwayat.map((row) => {
         const waktu = new Date(row.created_at)

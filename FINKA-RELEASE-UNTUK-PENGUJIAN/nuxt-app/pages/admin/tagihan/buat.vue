@@ -116,7 +116,7 @@ definePageMeta({
         <div class="invoice__body">
           <div class="kop">
             <div class="kop__brand">
-              <svg width="18" height="20" viewBox="0 0 40 44" fill="var(--navy)"><rect x="13" y="0" width="27" height="14" rx="6" /><rect x="0" y="10" width="14" height="14" rx="6" /><rect x="9" y="15" width="24" height="14" rx="6" /><rect x="4" y="30" width="14" height="14" rx="6" /></svg>
+              <FinkaMark :width="18" :height="20" color="var(--navy)" />
               <div>
                 <div class="kop__nama display">Yayasan Nurul Ilmi</div>
                 <div class="kop__alamat">Jl. Melati Raya 12, Bandung</div>

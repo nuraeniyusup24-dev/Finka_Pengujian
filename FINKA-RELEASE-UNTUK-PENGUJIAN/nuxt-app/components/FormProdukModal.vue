@@ -14,7 +14,7 @@
 <script>
 import { api } from '~/utils/api'
 export default {
-  props: { produk: { type: Object, default: null }, outletNama: { type: String, required: true }, outletId: { type: Number, required: true }, contohKategori: { type: String, default: 'Umum' } },
+  props: { produk: { type: Object, default: null }, outletNama: { type: String, required: true }, outletId: { type: String, required: true }, contohKategori: { type: String, default: 'Umum' } },
   data() { return { error: '', previousDocumentOverflow: '', previousBodyOverflow: '', form: { nama: this.produk ? this.produk.nama : '', ket: this.produk ? this.produk.ket : '', kategori: this.produk ? this.produk.kategori : '', harga: this.produk ? this.produk.harga : null, stok: this.produk ? this.produk.stok : 0 } } },
   mounted() {
     this.previousDocumentOverflow = document.documentElement.style.overflow
@@ -31,13 +31,13 @@ export default {
       if (!this.form.nama || !this.form.kategori || !Number.isFinite(Number(this.form.harga)) || Number(this.form.harga) <= 0 || Number(this.form.stok) < 0) { this.error = 'Lengkapi data produk dengan harga dan stok yang valid.'; return }
       const data = { ...this.form, harga: Number(this.form.harga), stok: Number(this.form.stok), tile: this.form.nama.slice(0, 1).toUpperCase() }
       try {
-        const outletKey = this.outletId === 1 ? 'koperasi' : 'kantin_utama'
+        const outletKey = this.outletId
         if (this.produk && Number.isInteger(Number(this.produk.id))) {
-          await api.ubahProduk(this.produk.id, data.nama, data.harga)
+          await api.ubahProduk(this.produk.id, data.nama, data.harga, data.kategori, data.ket)
           this.$store.commit('ubahProduk', { id: this.produk.id, ...data })
         } else if (this.produk) this.$store.commit('ubahProduk', { id: this.produk.id, ...data })
         else {
-          const result = await api.tambahProduk(data.nama, data.harga, outletKey)
+          const result = await api.tambahProduk(data.nama, data.harga, outletKey, data.kategori, data.ket)
           this.$store.commit('tambahProduk', { id: result.produk.id, outlet: this.outletId, ...data })
         }
         this.$emit('berhasil', { nama: data.nama, mode: this.produk ? 'ubah' : 'tambah' })

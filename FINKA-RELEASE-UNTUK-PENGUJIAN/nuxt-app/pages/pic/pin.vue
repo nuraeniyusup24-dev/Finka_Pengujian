@@ -67,7 +67,10 @@ export default {
       const state = this.$store.state.pos
       const items = Object.keys(state.cart).map((id) => ({ produk_id: Number(id), qty: state.cart[id] }))
       const rincian = this.$store.getters['pos/items']
-      const info = OUTLET_INFO[state.outlet] || OUTLET_INFO[0]
+      const info = OUTLET_INFO[state.outlet] || {
+        nama: this.$store.state.auth.user && this.$store.state.auth.user.outlet || 'Outlet',
+        kasir: this.$store.state.auth.user && this.$store.state.auth.user.nama || 'Kasir'
+      }
       try {
         const hasil = state.mode === 'tunai'
           ? await api.tarikTunai(state.scanId, pin, this.total, state.qrToken)

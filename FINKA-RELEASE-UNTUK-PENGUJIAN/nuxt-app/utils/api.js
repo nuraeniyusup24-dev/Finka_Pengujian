@@ -67,8 +67,8 @@ export const api = {
   produk: () => request('GET', '/pos/produk'),
   qrSiswa: (token) => request('GET', '/pos/qr', undefined, token),
   resolveQr: (token) => request('POST', '/pos/qr/resolve', { token }),
-  tambahProduk: (nama, harga, outlet) => request('POST', '/pos/produk', { nama, harga, outlet }),
-  ubahProduk: (id, nama, harga) => request('PUT', '/pos/produk/' + id, { nama, harga }),
+  tambahProduk: (nama, harga, outlet, kategori, deskripsi) => request('POST', '/pos/produk', { nama, harga, outlet, kategori, deskripsi }),
+  ubahProduk: (id, nama, harga, kategori, deskripsi) => request('PUT', '/pos/produk/' + id, { nama, harga, kategori, deskripsi }),
   hapusProduk: (id) => request('DELETE', '/pos/produk/' + id),
   transaksi: (siswaId, pin, items, qrToken) => request('POST', '/pos/transaksi', { siswa_id: siswaId, pin, items, qr_token: qrToken }),
   tarikTunai: (siswaId, pin, nominal, qrToken) => request('POST', '/pos/tarik-tunai', { siswa_id: siswaId, pin, nominal, qr_token: qrToken }),
@@ -112,6 +112,7 @@ export const api = {
   aturPasswordSiswa: (id, password, konfirmasiPassword) =>
     request('POST', '/admin/users/' + id + '/password', { password, konfirmasi_password: konfirmasiPassword }),
   imporSiswa: (baris, simpan) => request('POST', '/admin/impor-siswa', { baris, simpan }),
+  imporPic: (baris, simpan) => request('POST', '/admin/impor-pic', { baris, simpan }),
   tagihanRingkasan: (bulan) => request('GET', '/admin/tagihan-ringkasan' + (bulan ? '?bulan=' + encodeURIComponent(bulan) : '')),
   buatTagihan: (payload) => request('POST', '/admin/tagihan/bulk', payload),
   gantiPin: (pinLama, pinBaru) => request('POST', '/siswa/saya/ganti-pin', { pin_lama: pinLama, pin_baru: pinBaru }),

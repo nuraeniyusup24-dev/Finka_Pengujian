@@ -99,6 +99,19 @@
               <input v-model.trim="outlet" required maxlength="80" placeholder="Contoh: Kantin Gedung A" />
             </label>
           </div>
+          <div class="field">
+            <span>Jam operasional</span>
+            <div class="fields-row">
+              <label class="field">
+                <span>Buka</span>
+                <input v-model="jamBuka" type="time" required />
+              </label>
+              <label class="field">
+                <span>Tutup</span>
+                <input v-model="jamTutup" type="time" required />
+              </label>
+            </div>
+          </div>
           <div class="fields-row">
             <label class="field">
               <span>Nomor HP</span>
@@ -150,6 +163,8 @@ export default {
       akunOrtu: [],
       memuatOrtu: false,
       outlet: '',
+      jamBuka: '07:00',
+      jamTutup: '14:00',
       loading: false,
       error: '',
       previousDocumentOverflow: '',
@@ -188,11 +203,12 @@ export default {
       if (nomorLokal && !/^08\d{8,11}$/.test(nomorLokal)) { this.error = 'Nomor WhatsApp harus 10–13 digit dan diawali 08 atau +62.'; return }
       const emailBersih = this.email.trim().toLowerCase()
       if (emailBersih && (emailBersih.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailBersih))) { this.error = 'Format email tidak valid.'; return }
+      if (this.jenis === 'pic' && this.jamTutup <= this.jamBuka) { this.error = 'Jam tutup harus setelah jam buka.'; return }
       this.loading = true
       try {
-        const payload = { username: this.jenis === 'siswa' ? this.nis.trim() : this.username.trim(), password: this.password, nama: this.nama.trim(), role: this.jenis === 'pic' ? 'pic' : this.jenis, kelas: this.kelas.trim() || undefined, nis: this.nis.trim() || undefined, ortu_id: this.jenis === 'siswa' ? Number(this.ortuId) : undefined, outlet: this.jenis === 'pic' ? this.outlet.trim() : undefined, hubungan: this.jenis === 'ortu' ? this.hubungan : undefined, no_hp: nomorLokal || undefined, email: emailBersih || undefined }
+        const payload = { username: this.jenis === 'siswa' ? this.nis.trim() : this.username.trim(), password: this.password, nama: this.nama.trim(), role: this.jenis === 'pic' ? 'pic' : this.jenis, kelas: this.kelas.trim() || undefined, nis: this.nis.trim() || undefined, ortu_id: this.jenis === 'siswa' ? Number(this.ortuId) : undefined, outlet: this.jenis === 'pic' ? this.outlet.trim() : undefined, outlet_jam: this.jenis === 'pic' ? `${this.jamBuka}–${this.jamTutup}` : undefined, hubungan: this.jenis === 'ortu' ? this.hubungan : undefined, no_hp: nomorLokal || undefined, email: emailBersih || undefined }
         const result = await api.buatAkun(payload)
-        const akun = { jenis: this.jenis, nama: this.nama, kelas: this.kelas, nis: this.nis, outlet: this.outlet }
+        const akun = { jenis: this.jenis, nama: this.nama, kelas: this.kelas, nis: this.nis, outlet: this.outlet, outlet_jam: this.jenis === 'pic' ? `${this.jamBuka}–${this.jamTutup}` : undefined }
         this.$emit('berhasil', { ...akun, akun: result.user })
         this.$emit('tutup')
       } catch (e) { this.error = e.message || 'Gagal membuat akun.' }

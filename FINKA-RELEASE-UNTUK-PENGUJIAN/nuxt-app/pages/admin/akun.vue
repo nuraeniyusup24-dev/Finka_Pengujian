@@ -152,19 +152,29 @@ definePageMeta({
       <section class="impor-modal" role="dialog" aria-modal="true" aria-labelledby="impor-title">
         <div class="impor-head">
           <div>
-            <h2 id="impor-title">Daftarkan siswa dari Excel</h2>
-            <p>Upload .xlsx berisi data siswa dan orang tua/wali.</p>
+            <h2 id="impor-title">{{ importExcel.jenis === 'pic' ? 'Daftarkan PIC dan menu dari Excel' : 'Daftarkan siswa dari Excel' }}</h2>
+            <p>Upload .xlsx untuk membuat akun dan memasukkan data ke fitur terkait.</p>
           </div>
           <button type="button" class="impor-close" aria-label="Tutup" :disabled="importExcel.loading" @click="tutupImportExcel">×</button>
         </div>
         <div v-if="!importExcel.hasil" class="impor-body">
+          <div class="impor-jenis" role="group" aria-label="Jenis impor">
+            <button type="button" :class="{ 'impor-jenis--aktif': importExcel.jenis === 'siswa' }" @click="ubahJenisImpor('siswa')">Siswa &amp; orang tua</button>
+            <button type="button" :class="{ 'impor-jenis--aktif': importExcel.jenis === 'pic' }" @click="ubahJenisImpor('pic')">PIC &amp; menu</button>
+          </div>
           <button type="button" class="impor-template" @click="unduhTemplatExcel">Unduh templat Excel</button>
           <label class="impor-file">
             <span>Pilih workbook (.xlsx)</span>
-            <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="importExcel.loading" @change="pilihFileExcel" />
+            <input ref="imporFileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="importExcel.loading" @change="pilihFileExcel" />
           </label>
-          <p class="impor-note">Kolom wajib: nama_siswa, nis, kelas, password_siswa, nama_ortu, password_ortu. Password siswa dan orang tua minimal 8 karakter. Untuk kakak-adik dalam satu akun wali, gunakan password_ortu yang sama. username_ortu opsional; isi untuk menghubungkan akun wali yang sudah ada (password_ortu boleh dikosongkan dan tidak mengubah password lama). Maksimal 300 siswa dan 3 MB per file.</p>
-          <p class="impor-note">Siswa login menggunakan nama lengkap atau NIS dan password dari Excel. Saat login pertama, siswa wajib mengganti password sementara lalu membuat PIN pembayaran. Orang tua/wali yang akunnya baru dibuat juga wajib mengganti password sementara dan membuat PIN konfirmasi. Jika username_ortu menghubungkan akun yang sudah ada, gunakan password akun tersebut; password lama tidak diubah. Simpan file Excel dengan aman karena berisi password.</p>
+          <template v-if="importExcel.jenis === 'siswa'">
+            <p class="impor-note">Kolom wajib: nama_siswa, nis, kelas, password_siswa, nama_ortu, password_ortu. Password siswa dan orang tua minimal 8 karakter. Untuk kakak-adik dalam satu akun wali, gunakan password_ortu yang sama. username_ortu opsional; isi untuk menghubungkan akun wali yang sudah ada (password_ortu boleh dikosongkan dan tidak mengubah password lama). Maksimal 300 siswa dan 3 MB per file.</p>
+            <p class="impor-note">Siswa login menggunakan nama lengkap atau NIS dan password dari Excel. Saat login pertama, siswa wajib mengganti password sementara lalu membuat PIN pembayaran. Orang tua/wali yang akunnya baru dibuat juga wajib mengganti password sementara dan membuat PIN konfirmasi. Jika username_ortu menghubungkan akun yang sudah ada, gunakan password akun tersebut; password lama tidak diubah.</p>
+          </template>
+          <template v-else>
+            <p class="impor-note">Gunakan satu baris untuk setiap menu dan ulangi data PIC/outlet pada semua baris menu PIC tersebut. Kolom wajib: nama_pic, username_pic, password_sementara, nama_outlet, jam_buka, jam_tutup, nama_menu, kategori, harga. deskripsi opsional. Password sementara minimal 8 karakter, akan diwajibkan untuk diganti saat PIC login pertama. PIC tidak perlu membuat PIN. Maksimal 300 menu per file.</p>
+          </template>
+          <p class="impor-note">Simpan file Excel dengan aman karena berisi password teks biasa. Bagikan password sementara hanya kepada pemilik akun.</p>
           <p v-if="importExcel.namaFile" class="impor-filename">{{ importExcel.namaFile }}</p>
           <p v-if="importExcel.error" class="impor-error" role="alert">{{ importExcel.error }}</p>
           <div v-if="importExcel.pratinjau" class="impor-preview">
@@ -174,13 +184,24 @@ definePageMeta({
             </div>
             <div class="impor-table-wrap">
               <table class="impor-table">
-                <thead><tr><th>Baris</th><th>Siswa</th><th>NIS / kelas</th><th>Orang tua</th><th>Hasil</th></tr></thead>
+                <thead>
+                  <tr v-if="importExcel.jenis === 'siswa'"><th>Baris</th><th>Siswa</th><th>NIS / kelas</th><th>Orang tua</th><th>Hasil</th></tr>
+                  <tr v-else><th>Baris</th><th>PIC / outlet</th><th>Username</th><th>Menu</th><th>Kategori / harga</th><th>Hasil</th></tr>
+                </thead>
                 <tbody>
                   <tr v-for="row in importExcel.pratinjau.baris.slice(0, 40)" :key="row.no">
                     <td>{{ row.no }}</td>
-                    <td>{{ row.nama_siswa }}</td>
-                    <td>{{ row.nis }} · {{ row.kelas }}</td>
-                    <td>{{ row.nama_ortu }}</td>
+                    <template v-if="importExcel.jenis === 'siswa'">
+                      <td>{{ row.nama_siswa }}</td>
+                      <td>{{ row.nis }} · {{ row.kelas }}</td>
+                      <td>{{ row.nama_ortu }}</td>
+                    </template>
+                    <template v-else>
+                      <td>{{ row.nama_pic }} · {{ row.nama_outlet }}</td>
+                      <td>{{ row.username_pic }}</td>
+                      <td>{{ row.nama_menu }}</td>
+                      <td>{{ row.kategori }} · {{ $rp(Number(row.harga) || 0) }}</td>
+                    </template>
                     <td :class="row.error ? 'impor-error' : 'impor-ok'">{{ row.error || 'Siap' }}</td>
                   </tr>
                 </tbody>
@@ -190,20 +211,26 @@ definePageMeta({
           </div>
         </div>
         <div v-else class="impor-body">
-          <p class="impor-ok">{{ importExcel.hasil.jumlah }} akun siswa berhasil dibuat dan terhubung ke akun orang tua.</p>
-          <p class="impor-note">Siswa dan orang tua/wali dengan akun baru login memakai kredensial dari Excel dan wajib mengganti password sementara saat pertama masuk, lalu membuat PIN masing-masing. PIN siswa dipakai untuk pembayaran di kantin/koperasi; PIN orang tua dipakai untuk konfirmasi isi saldo dan pembayaran tagihan. Akun orang tua yang sudah ada tetap memakai password lama dan tidak diubah oleh impor.</p>
-          <p class="impor-note">Simpan file Excel dengan aman dan bagikan kredensial hanya kepada pemilik akun. File unduhan terpisah hanya berisi kredensial akun orang tua yang baru dibuat.</p>
+          <template v-if="importExcel.jenis === 'siswa'">
+            <p class="impor-ok">{{ importExcel.hasil.jumlah }} akun siswa berhasil dibuat dan terhubung ke akun orang tua.</p>
+            <p class="impor-note">Akun baru wajib mengganti password sementara saat login pertama, lalu membuat PIN masing-masing. Simpan file Excel dengan aman dan bagikan kredensial hanya kepada pemilik akun.</p>
+          </template>
+          <template v-else>
+            <p class="impor-ok">{{ importExcel.hasil.jumlah_pic }} akun PIC dan {{ importExcel.hasil.jumlah_menu }} menu berhasil dimasukkan.</p>
+            <p class="impor-note">PIC masuk menggunakan username dan password sementara dari Excel. Saat login pertama PIC wajib mengganti password; PIC tidak diminta membuat PIN.</p>
+          </template>
+          <p class="impor-note">Bagikan password secara pribadi dan hapus salinan file Excel yang berisi password setelah tidak diperlukan.</p>
         </div>
         <footer class="impor-actions">
           <button v-if="!importExcel.hasil" type="button" class="impor-cancel" :disabled="importExcel.loading" @click="tutupImportExcel">Batal</button>
-          <button v-if="importExcel.hasil" type="button" class="impor-primary" @click="unduhKredensialOrtu">Unduh kredensial orang tua (CSV)</button>
           <button
-            v-else
+            v-if="!importExcel.hasil"
             type="button"
             class="impor-primary"
             :disabled="importExcel.loading || !importExcel.pratinjau || importExcel.pratinjau.jumlah_error > 0"
             @click="simpanImportExcel"
-          >{{ importExcel.loading ? 'Memproses…' : 'Daftarkan semua akun' }}</button>
+          >{{ importExcel.loading ? 'Memproses…' : importExcel.jenis === 'pic' ? 'Daftarkan PIC dan menu' : 'Daftarkan semua akun' }}</button>
+          <button v-if="importExcel.hasil && importExcel.jenis === 'siswa'" type="button" class="impor-primary" @click="unduhKredensialOrtu">Unduh kredensial orang tua (CSV)</button>
           <button v-if="importExcel.hasil" type="button" class="impor-cancel" @click="tutupImportExcel">Selesai</button>
         </footer>
       </section>
@@ -247,7 +274,7 @@ definePageMeta({
 
 <script>
 import { api } from '~/utils/api'
-import { petakanImpor, TEMPLAT_IMPOR, toCsv } from '~/utils/csv'
+import { petakanImpor, petakanImporPic, TEMPLAT_IMPOR, TEMPLAT_IMPOR_PIC, toCsv } from '~/utils/csv'
 import { createXlsxWorkbook, readFirstXlsxSheet } from '~/utils/xlsx'
 export default {
 
@@ -261,7 +288,7 @@ export default {
       loadingUsers: true,
       requestInProgress: false,
       userError: '',
-      importExcel: { buka: false, namaFile: '', baris: [], pratinjau: null, hasil: null, loading: false, error: '' },
+      importExcel: { buka: false, jenis: 'siswa', namaFile: '', baris: [], pratinjau: null, hasil: null, loading: false, error: '' },
       passwordSiswa: { buka: false, user: null, password: '', konfirmasi: '', loading: false, error: '' },
       refreshTimer: null,
       toastTimer: null
@@ -374,7 +401,16 @@ export default {
       }
     },
     bukaImportExcel() {
-      this.importExcel = { buka: true, namaFile: '', baris: [], pratinjau: null, hasil: null, loading: false, error: '' }
+      this.importExcel = { buka: true, jenis: 'siswa', namaFile: '', baris: [], pratinjau: null, hasil: null, loading: false, error: '' }
+    },
+    ubahJenisImpor(jenis) {
+      if (this.importExcel.loading || !['siswa', 'pic'].includes(jenis)) return
+      this.importExcel.jenis = jenis
+      this.importExcel.namaFile = ''
+      this.importExcel.baris = []
+      this.importExcel.pratinjau = null
+      this.importExcel.error = ''
+      if (this.$refs.imporFileInput) this.$refs.imporFileInput.value = ''
     },
     tutupImportExcel() {
       if (this.importExcel.loading) return
@@ -382,11 +418,15 @@ export default {
       this.importExcel.hasil = null
     },
     unduhTemplatExcel() {
-      const workbook = createXlsxWorkbook(TEMPLAT_IMPOR.slice(0, 1))
+      const pic = this.importExcel.jenis === 'pic'
+      const workbook = createXlsxWorkbook(
+        (pic ? TEMPLAT_IMPOR_PIC : TEMPLAT_IMPOR).slice(0, 1),
+        pic ? 'PIC dan Menu' : 'Akun Siswa'
+      )
       const url = URL.createObjectURL(new Blob([workbook], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = 'templat-impor-akun-siswa.xlsx'
+      link.download = pic ? 'templat-impor-pic-menu.xlsx' : 'templat-impor-akun-siswa.xlsx'
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -397,6 +437,7 @@ export default {
       this.importExcel.error = ''
       this.importExcel.pratinjau = null
       this.importExcel.baris = []
+      this.importExcel.hasil = null
       if (!file) return
       this.importExcel.namaFile = file.name
       if (!/\.xlsx$/i.test(file.name)) {
@@ -411,11 +452,14 @@ export default {
       this.importExcel.loading = true
       try {
         const workbook = readFirstXlsxSheet(await file.arrayBuffer())
-        const parsed = petakanImpor(workbook)
+        const pic = this.importExcel.jenis === 'pic'
+        const parsed = pic ? petakanImporPic(workbook) : petakanImpor(workbook)
         if (parsed.galat) throw new Error(parsed.galat)
-        if (parsed.baris.length > 300) throw new Error(`File berisi ${parsed.baris.length} siswa; maksimal 300 per unggahan.`)
+        if (parsed.baris.length > 300) throw new Error(`File berisi ${parsed.baris.length} baris; maksimal 300 per unggahan.`)
         this.importExcel.baris = parsed.baris
-        this.importExcel.pratinjau = await api.imporSiswa(parsed.baris, false)
+        this.importExcel.pratinjau = pic
+          ? await api.imporPic(parsed.baris, false)
+          : await api.imporSiswa(parsed.baris, false)
       } catch (error) {
         this.importExcel.error = error.message || 'File Excel tidak dapat diproses.'
       } finally {
@@ -424,11 +468,17 @@ export default {
     },
     async simpanImportExcel() {
       if (!this.importExcel.pratinjau || this.importExcel.pratinjau.jumlah_error) return
-      if (!window.confirm(`Daftarkan ${this.importExcel.pratinjau.valid} akun siswa dan akun orang tua terkait?`)) return
+      const pic = this.importExcel.jenis === 'pic'
+      const konfirmasi = pic
+        ? `Daftarkan ${new Set(this.importExcel.baris.map((row) => row.username_pic)).size} akun PIC dan ${this.importExcel.pratinjau.valid} menu?`
+        : `Daftarkan ${this.importExcel.pratinjau.valid} akun siswa dan akun orang tua terkait?`
+      if (!window.confirm(konfirmasi)) return
       this.importExcel.loading = true
       this.importExcel.error = ''
       try {
-        this.importExcel.hasil = await api.imporSiswa(this.importExcel.baris, true)
+        this.importExcel.hasil = pic
+          ? await api.imporPic(this.importExcel.baris, true)
+          : await api.imporSiswa(this.importExcel.baris, true)
         await this.muatPengguna()
       } catch (error) {
         this.importExcel.error = error.message || 'Impor akun tidak dapat disimpan.'
@@ -558,6 +608,9 @@ export default {
 .impor-head p, .impor-note { margin: 4px 0 0; color: var(--muted); font: 400 12px/1.5 var(--font-body); }
 .impor-close { width: 34px; height: 34px; border: 0; border-radius: var(--r-pill); background: var(--bg); color: var(--ink); font-size: 22px; cursor: pointer; }
 .impor-body { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px; }
+.impor-jenis { display: flex; flex-wrap: wrap; gap: 8px; }
+.impor-jenis button { border: 1px solid var(--line); border-radius: var(--r-pill); padding: 8px 12px; background: #fff; color: var(--muted); font: 600 12px var(--font-body); cursor: pointer; }
+.impor-jenis button.impor-jenis--aktif { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
 .impor-template, .impor-file { width: fit-content; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 13px; background: #fff; color: var(--blue); font: 600 12px var(--font-body); cursor: pointer; }
 .impor-file { display: flex; align-items: center; gap: 10px; color: var(--ink); }
 .impor-file input { max-width: 260px; font: 400 11px var(--font-body); }

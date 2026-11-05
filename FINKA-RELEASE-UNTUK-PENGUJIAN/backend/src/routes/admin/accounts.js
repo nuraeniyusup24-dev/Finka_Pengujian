@@ -22,6 +22,109 @@ function passwordValid(value) {
 }
 function isUniqueViolation(error) { return error?.code === '23505' }
 
+async function validasiImporPic(inputRows) {
+  if (!Array.isArray(inputRows) || inputRows.length === 0) {
+    return { valid: 0, jumlah_error: 0, baris: [], pic: [] }
+  }
+  if (inputRows.length > 300) {
+    return {
+      valid: 0,
+      jumlah_error: inputRows.length,
+      baris: inputRows.map((row) => ({ ...row, error: 'Maksimal 300 baris menu per unggahan.' })),
+      pic: []
+    }
+  }
+
+  const baris = inputRows.map((row) => ({
+    no: Number(row?.no) || 0,
+    nama_pic: String(row?.nama_pic || '').trim(),
+    username_pic: String(row?.username_pic || '').trim(),
+    password_sementara: String(row?.password_sementara || ''),
+    nama_outlet: String(row?.nama_outlet || '').trim(),
+    jam_buka: String(row?.jam_buka || '').trim(),
+    jam_tutup: String(row?.jam_tutup || '').trim(),
+    nama_menu: String(row?.nama_menu || '').trim(),
+    kategori: String(row?.kategori || '').trim(),
+    harga: String(row?.harga || '').trim(),
+    deskripsi: String(row?.deskripsi || '').trim(),
+    error: ''
+  }))
+  const pic = new Map()
+  const outletHours = new Map()
+  const menus = new Set()
+  const errors = []
+
+  for (const row of baris) {
+    const gagal = (message) => { if (!row.error) row.error = message }
+    if (!teksValid(row.nama_pic, 80)) gagal('Nama PIC wajib diisi (maksimal 80 karakter).')
+    else if (!usernameValid(row.username_pic)) gagal('Username PIC wajib diisi (maksimal 64 karakter; gunakan huruf, angka, titik, garis bawah, atau tanda hubung).')
+    else if (!passwordValid(row.password_sementara)) gagal('Password sementara wajib minimal 8 karakter dan maksimal 72 byte.')
+    else if (!teksValid(row.nama_outlet, 80)) gagal('Nama outlet wajib diisi (maksimal 80 karakter).')
+    else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(row.jam_buka) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(row.jam_tutup) || row.jam_tutup <= row.jam_buka) gagal('Jam buka/tutup tidak valid.')
+    else if (!teksValid(row.nama_menu, 120)) gagal('Nama menu wajib diisi (maksimal 120 karakter).')
+    else if (!teksValid(row.kategori, 40)) gagal('Kategori wajib diisi (maksimal 40 karakter).')
+    else if (!/^\d+$/.test(row.harga) || !Number.isSafeInteger(Number(row.harga)) || Number(row.harga) <= 0) gagal('Harga harus bilangan bulat lebih dari 0.')
+    else if (row.deskripsi.length > 120) gagal('Deskripsi maksimal 120 karakter.')
+
+    if (row.error) continue
+    const account = {
+      nama: row.nama_pic,
+      password: row.password_sementara,
+      outlet: row.nama_outlet,
+      hours: `${row.jam_buka}–${row.jam_tutup}`
+    }
+    const prior = pic.get(row.username_pic)
+    if (prior && (prior.nama !== account.nama || prior.password !== account.password ||
+      prior.outlet !== account.outlet || prior.hours !== account.hours)) {
+      gagal('Data PIC dengan username yang sama harus konsisten pada setiap baris menu.')
+      continue
+    }
+    if (!prior) pic.set(row.username_pic, account)
+
+    const outletKey = row.nama_outlet.toLowerCase()
+    const priorHours = outletHours.get(outletKey)
+    if (priorHours && priorHours !== account.hours) {
+      gagal('Jam operasional harus sama untuk seluruh PIC pada outlet yang sama.')
+      continue
+    }
+    if (!priorHours) outletHours.set(outletKey, account.hours)
+
+    const menuKey = `${row.nama_outlet.toLowerCase()}\u0000${row.nama_menu.toLowerCase()}`
+    if (menus.has(menuKey)) {
+      gagal('Nama menu yang sama terulang pada outlet ini.')
+      continue
+    }
+    menus.add(menuKey)
+  }
+
+  for (const [username, account] of pic) {
+    const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(username)
+    if (existing) {
+      for (const row of baris) if (row.username_pic === username && !row.error) row.error = 'Username PIC sudah digunakan.'
+    }
+    const conflict = await db.prepare("SELECT id FROM users WHERE role = 'pic' AND lower(trim(outlet)) = lower(trim(?)) AND outlet_hours IS NOT NULL AND outlet_hours != ? LIMIT 1")
+      .get(account.outlet, account.hours)
+    if (conflict) {
+      for (const row of baris) if (row.username_pic === username && !row.error) row.error = 'Jam operasional outlet harus sama untuk seluruh PIC pada outlet yang sama.'
+    }
+  }
+
+  for (const row of baris) {
+    if (row.error) continue
+    const existing = await db.prepare('SELECT id FROM produk WHERE lower(trim(outlet)) = lower(trim(?)) AND lower(trim(nama)) = lower(trim(?)) LIMIT 1')
+      .get(row.nama_outlet, row.nama_menu)
+    if (existing) row.error = 'Nama menu sudah terdaftar pada outlet ini.'
+  }
+
+  for (const row of baris) if (row.error) errors.push(row)
+  return {
+    valid: baris.length - errors.length,
+    jumlah_error: errors.length,
+    baris: baris.map(({ password_sementara, ...row }) => row),
+    pic: Array.from(pic.keys())
+  }
+}
+
 adminAccountsRouter.post('/users/siswa', wajibLogin, hanyaAdmin, async (req, res) => {
   const nama = String(req.body?.nama || '').trim()
   const kelas = String(req.body?.kelas || '').trim()
@@ -230,6 +333,72 @@ adminAccountsRouter.post('/impor-siswa', wajibLogin, hanyaAdmin, async (req, res
   }
 })
 
+adminAccountsRouter.post('/impor-pic', wajibLogin, hanyaAdmin, async (req, res) => {
+  const rows = req.body?.baris
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'File harus berisi minimal satu baris PIC dan menu.' })
+  }
+  if (rows.length > 300) return res.status(400).json({ error: 'Maksimal 300 baris menu per unggahan.' })
+
+  const simpan = req.body?.simpan === true
+  try {
+    if (!simpan) return res.json(await validasiImporPic(rows))
+
+    const result = await db.transaction(async () => {
+      const preview = await validasiImporPic(rows)
+      if (preview.jumlah_error) {
+        const error = new Error('Perbaiki baris yang ditandai sebelum menyimpan impor.')
+        error.status = 400
+        error.preview = preview
+        throw error
+      }
+
+      const picByUsername = new Map()
+      for (const row of rows) {
+        const username = String(row.username_pic).trim()
+        if (!picByUsername.has(username)) {
+          picByUsername.set(username, {
+            nama: String(row.nama_pic).trim(),
+            password: String(row.password_sementara),
+            outlet: String(row.nama_outlet).trim(),
+            hours: `${String(row.jam_buka).trim()}–${String(row.jam_tutup).trim()}`
+          })
+        }
+      }
+
+      const createdPic = []
+      for (const [username, pic] of picByUsername) {
+        const user = await db.prepare(`INSERT INTO users
+          (username, password_hash, nama, role, outlet, outlet_hours, active, must_change_password)
+          VALUES (?, ?, ?, 'pic', ?, ?, 1, 1)`)
+          .run(username, bcrypt.hashSync(pic.password, 10), pic.nama, pic.outlet, pic.hours)
+        const userId = Number(user.lastInsertRowid)
+        createdPic.push({ id: userId, nama: pic.nama, username, outlet: pic.outlet, outlet_jam: pic.hours })
+        await audit(req, 'BUAT_AKUN', `pic · ${pic.nama} · ${pic.outlet} · impor Excel`, 'users', userId)
+      }
+
+      for (const row of rows) {
+        const namaMenu = String(row.nama_menu).trim()
+        const kategori = String(row.kategori).trim()
+        const outlet = String(row.nama_outlet).trim()
+        const harga = Number(row.harga)
+        const deskripsi = String(row.deskripsi || '').trim()
+        const product = await db.prepare('INSERT INTO produk (nama, harga, outlet, kategori, deskripsi) VALUES (?, ?, ?, ?, ?)')
+          .run(namaMenu, harga, outlet, kategori, deskripsi || null)
+        await audit(req, 'BUAT_PRODUK', `${namaMenu} · Rp ${harga.toLocaleString('id-ID')} · ${outlet} · impor Excel`, 'produk', Number(product.lastInsertRowid))
+      }
+
+      return { jumlah_pic: createdPic.length, jumlah_menu: rows.length, akun: createdPic }
+    })()
+    res.status(201).json({ ok: true, ...result })
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message, ...(error.preview ? { ...error.preview } : {}) })
+    if (isUniqueViolation(error)) return res.status(409).json({ error: 'Username PIC atau menu sudah digunakan. Muat ulang data, lalu periksa file Excel.' })
+    console.error('Gagal mengimpor akun PIC dan menu:', error)
+    res.status(500).json({ error: pesanErrorSql(error, 'Gagal menyimpan impor akun PIC dan menu') })
+  }
+})
+
 adminAccountsRouter.post('/users/:id/password', wajibLogin, hanyaAdmin, async (req, res) => {
   const id = Number(req.params.id)
   const password = req.body?.password
@@ -264,7 +433,7 @@ adminAccountsRouter.post('/users/:id/password', wajibLogin, hanyaAdmin, async (r
 })
 
 adminAccountsRouter.post('/users', wajibLogin, hanyaAdmin, async (req, res) => {
-  const { username: inputUsername, password: inputPassword, nama, role, kelas, nis, ortu_id, anak_ids, anak_baru, outlet, hubungan, pekerjaan, no_hp, email } = req.body || {}
+  const { username: inputUsername, password: inputPassword, nama, role, kelas, nis, ortu_id, anak_ids, anak_baru, outlet, outlet_jam, hubungan, pekerjaan, no_hp, email } = req.body || {}
   let username = typeof inputUsername === 'string' ? inputUsername.trim() : ''
   let password = typeof inputPassword === 'string' ? inputPassword : ''
   let passwordDibuatServer = false
@@ -309,6 +478,14 @@ adminAccountsRouter.post('/users', wajibLogin, hanyaAdmin, async (req, res) => {
   if (role === 'pic' && (!outletNama || outletNama.length > 80)) {
     return res.status(400).json({ error: 'Nama outlet PIC wajib diisi (maksimal 80 karakter)' })
   }
+  const outletJam = typeof outlet_jam === 'string' ? outlet_jam.trim() : ''
+  const jamOperasional = outletJam.match(/^((?:[01]\d|2[0-3]):[0-5]\d)–((?:[01]\d|2[0-3]):[0-5]\d)$/)
+  if (role === 'pic' && (!jamOperasional || jamOperasional[2] <= jamOperasional[1])) {
+    return res.status(400).json({ error: 'Jam operasional PIC wajib diisi dengan format jam buka dan tutup yang valid' })
+  }
+  if (role !== 'pic' && outlet_jam) {
+    return res.status(400).json({ error: 'Jam operasional hanya boleh diisi untuk akun PIC' })
+  }
   if (role !== 'pic' && outlet) {
     return res.status(400).json({ error: 'Outlet hanya boleh diisi untuk akun PIC' })
   }
@@ -352,9 +529,9 @@ adminAccountsRouter.post('/users', wajibLogin, hanyaAdmin, async (req, res) => {
       const salt = bcrypt.genSaltSync(10)
       const password_hash = bcrypt.hashSync(password, salt)
       const info = await db.prepare(`
-        INSERT INTO users (username, password_hash, pin_hash, nama, role, outlet, active, must_change_password)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-      `).run(usernameBersih, password_hash, null, namaBersih, role, role === 'pic' ? outletNama : null, role === 'siswa' ? 1 : 0)
+        INSERT INTO users (username, password_hash, pin_hash, nama, role, outlet, outlet_hours, active, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+      `).run(usernameBersih, password_hash, null, namaBersih, role, role === 'pic' ? outletNama : null, role === 'pic' ? outletJam : null, ['siswa', 'pic'].includes(role) ? 1 : 0)
       const userId = info.lastInsertRowid
 
       if (hubungan || pekerjaan || hpBersih || emailBersih) {

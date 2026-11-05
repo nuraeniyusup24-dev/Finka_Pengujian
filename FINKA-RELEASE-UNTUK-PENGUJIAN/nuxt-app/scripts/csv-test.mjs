@@ -1,4 +1,4 @@
-import { parseCsv, toCsv, petakanImpor, TEMPLAT_IMPOR } from '../utils/csv.js'
+import { parseCsv, toCsv, petakanImpor, petakanImporPic, TEMPLAT_IMPOR, TEMPLAT_IMPOR_PIC } from '../utils/csv.js'
 let gagal = 0
 const ok = (n, c, x) => { if (!c) gagal++; console.log(c ? 'OK   -' : 'GAGAL-', n, c ? '' : JSON.stringify(x)) }
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -10,6 +10,10 @@ r = parseCsv('a\tb\n1\t2'); ok('tab', eq(r.rows, [['a', 'b'], ['1', '2']]), r)
 r = parseCsv(''); ok('kosong', r.rows.length === 0, r)
 const t = petakanImpor(parseCsv(toCsv(TEMPLAT_IMPOR)))
 ok('templat dapat dibaca kembali (password siswa dan wali)', !t.galat && t.baris.length === 3 && t.baris[0].nis === '25010001' && t.baris[0].password_siswa === 'Contoh-Rina-741!' && t.baris[0].password_ortu === 'Contoh-Ortu-741!' && t.baris[1].password_ortu === t.baris[0].password_ortu && t.baris[2].no === 4 && t.baris[2].username_ortu === '', t)
+const p = petakanImporPic(parseCsv(toCsv(TEMPLAT_IMPOR_PIC)))
+ok('templat PIC memetakan baris menu dan data akun berulang', !p.galat && p.baris.length === 2 && p.baris[0].jam_buka === '07:00' && p.baris[1].nama_menu === 'Es teh' && p.baris[1].password_sementara === p.baris[0].password_sementara, p)
+const excelTimes = petakanImporPic(parseCsv('nama_pic;username_pic;password_sementara;nama_outlet;jam_buka;jam_tutup;nama_menu;kategori;harga\nPIC;pic.test;Password123;Outlet;0.2916667;0.5833333;Menu;Makanan;5000'))
+ok('jam Excel berbentuk angka diubah menjadi HH:mm', !excelTimes.galat && excelTimes.baris[0].jam_buka === '07:00' && excelTimes.baris[0].jam_tutup === '14:00', excelTimes)
 const alias = petakanImpor(parseCsv('Nama Siswa;NISN;Kelas;Password Siswa;Nama Orang Tua/Wali;Password Orang Tua\nA;123;7A;Password-Aman-1!;B;'))
 ok('alias kepala kolom (Nama Siswa, NISN, Password Siswa, Nama Orang Tua/Wali)', !alias.galat && alias.baris[0].nama_ortu === 'B' && alias.baris[0].nis === '123' && alias.baris[0].password_siswa === 'Password-Aman-1!' && alias.baris[0].password_ortu === '', alias)
 ok('kolom wajib hilang -> galat jelas', /nis/.test(petakanImpor(parseCsv('nama_siswa;kelas;nama_ortu\nA;7A;B')).galat), 0)

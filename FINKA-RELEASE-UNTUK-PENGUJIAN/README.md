@@ -16,6 +16,10 @@ FINKA adalah aplikasi pengelolaan transaksi dan layanan keuangan siswa di lingku
 
 Header Excel: `nama_siswa`, `nis`, `kelas`, `password_siswa`, `nama_ortu`, `username_ortu`, dan `password_ortu`. `username_ortu` boleh kosong untuk membuat akun wali baru dengan username otomatis; untuk akun wali baru, `password_ortu` wajib diisi. Untuk beberapa anak yang berbagi satu akun wali, gunakan password orang tua yang sama pada setiap baris. Jika `username_ortu` menghubungkan wali ke akun yang sudah ada, `password_ortu` boleh dikosongkan dan password lama tidak diubah. Siswa login menggunakan nama lengkap atau NIS, sedangkan orang tua memakai username yang tercantum pada hasil impor. Siswa dan orang tua dengan akun baru wajib mengganti password sementara masing-masing saat login pertama, lalu membuat PIN sendiri. PIN siswa digunakan untuk pembayaran di kantin/koperasi; PIN orang tua untuk konfirmasi isi saldo dan pembayaran tagihan. Password disimpan di database dalam bentuk hash, tetapi file Excel berisi password teks biasa sehingga harus dibagikan dan disimpan dengan aman.
 
+### Impor akun PIC dan menu
+
+Admin dapat memilih **PIC & menu** pada fitur impor Excel di halaman Akun. Gunakan satu baris untuk setiap menu dan ulangi data PIC/outlet pada setiap baris. Header wajib: `nama_pic`, `username_pic`, `password_sementara`, `nama_outlet`, `jam_buka`, `jam_tutup`, `nama_menu`, `kategori`, dan `harga`; `deskripsi` opsional. Waktu operasional ditulis sebagai `HH:mm`. Setiap PIC baru wajib mengganti password sementara saat login pertama dan tidak perlu membuat PIN. Menu hasil impor langsung tersedia di Outlet & Produk untuk outlet terkait. Lindungi dan hapus file Excel setelah kredensial dibagikan dengan aman.
+
 ## Teknologi
 
 | Komponen | Teknologi |

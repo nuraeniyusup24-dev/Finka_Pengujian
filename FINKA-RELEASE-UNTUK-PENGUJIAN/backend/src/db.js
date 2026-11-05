@@ -403,6 +403,16 @@ export async function initDb() {
   if (!userColumns.some((column) => column.name === 'must_change_password')) {
     await db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK(must_change_password IN (0,1))')
   }
+  if (!userColumns.some((column) => column.name === 'outlet_hours')) {
+    await db.exec('ALTER TABLE users ADD COLUMN outlet_hours TEXT')
+  }
+  const productColumns = await db.prepare('PRAGMA table_info(produk)').all()
+  if (!productColumns.some((column) => column.name === 'kategori')) {
+    await db.exec('ALTER TABLE produk ADD COLUMN kategori TEXT')
+  }
+  if (!productColumns.some((column) => column.name === 'deskripsi')) {
+    await db.exec('ALTER TABLE produk ADD COLUMN deskripsi TEXT')
+  }
 
   await db.exec(`UPDATE users
     SET must_change_password = 1

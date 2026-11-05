@@ -11,12 +11,7 @@ definePageMeta({
     <div class="stage">
       <div class="kartu">
         <div class="kartu__brand">
-          <svg class="kartu__logo" width="25" height="27" viewBox="0 0 40 44" aria-hidden="true">
-            <rect x="13" y="0" width="27" height="14" rx="6" />
-            <rect x="0" y="10" width="14" height="14" rx="6" />
-            <rect x="9" y="15" width="24" height="14" rx="6" />
-            <rect x="4" y="30" width="14" height="14" rx="6" />
-          </svg>
+          <FinkaMark class="kartu__logo" :width="25" :height="27" />
           <span class="kartu__brand-name">FINKA</span>
           <span class="kartu__brand-label">KARTU SISWA</span>
         </div>
@@ -120,10 +115,14 @@ export default {
         doc.rect(margin, margin + headerHeight / 2, width - margin * 2, headerHeight / 2, 'F')
 
         doc.setFillColor(255, 255, 255)
-        doc.roundedRect(4, 4, 4, 2.3, 0.6, 0.6, 'F')
-        doc.roundedRect(4, 5.8, 2.1, 2.2, 0.6, 0.6, 'F')
-        doc.roundedRect(5.2, 7.1, 3.5, 2.1, 0.6, 0.6, 'F')
-        doc.roundedRect(4.5, 9.1, 2.1, 2.1, 0.6, 0.6, 'F')
+        const markX = 3
+        const markY = 3.2
+        const markScale = 0.15
+        const markRadius = 0.9
+        doc.roundedRect(markX + 13 * markScale, markY, 27 * markScale, 14 * markScale, markRadius, markRadius, 'F')
+        doc.roundedRect(markX, markY + 10 * markScale, 14 * markScale, 14 * markScale, markRadius, markRadius, 'F')
+        doc.roundedRect(markX + 9 * markScale, markY + 15 * markScale, 24 * markScale, 14 * markScale, markRadius, markRadius, 'F')
+        doc.roundedRect(markX + 4 * markScale, markY + 30 * markScale, 14 * markScale, 14 * markScale, markRadius, markRadius, 'F')
         doc.setTextColor(255, 255, 255)
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(11)
@@ -139,10 +138,11 @@ export default {
         doc.setTextColor(10, 13, 59)
         doc.setFontSize(8)
         const nama = doc.splitTextToSize(String(this.siswa.nama || 'Siswa'), width - 18).slice(0, 2)
-        doc.text(nama, 15, 20.8)
+        const namaY = 22.3
+        doc.text(nama, 15, namaY, { lineHeightFactor: 1.05 })
         doc.setTextColor(75, 85, 99)
         doc.setFontSize(6)
-        doc.text(`${this.siswa.kelas || '—'} · NIS ${this.siswa.nis || '—'}`, 15, 26.5)
+        doc.text(`${this.siswa.kelas || '—'} · NIS ${this.siswa.nis || '—'}`, 15, namaY + nama.length * 3)
 
         doc.setDrawColor(229, 231, 235)
         doc.setLineWidth(0.35)
@@ -158,8 +158,16 @@ export default {
         doc.setFontSize(6)
         doc.text('QR khusus siswa · Jangan dibagikan', 7, 81)
 
-        const namaFile = String(this.siswa.nis || 'siswa').replace(/[^A-Za-z0-9._-]/g, '_')
-        doc.save(`kartu-finka-${namaFile}.pdf`)
+        const namaFile = [this.siswa.nama || 'siswa', this.siswa.kelas]
+          .filter(Boolean)
+          .join('-')
+          .normalize('NFKC')
+          .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .replace(/[. ]+$/g, '')
+          .toLowerCase() || 'siswa'
+        doc.save(`${namaFile}.pdf`)
       } catch (error) {
         this.pdfError = error.message || 'PDF kartu tidak dapat dibuat.'
       } finally {

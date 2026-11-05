@@ -82,33 +82,44 @@ posRouter.get('/produk', wajibLogin, async (req, res) => {
   if (!['admin', 'pic'].includes(req.user.role)) return res.status(403).json({ error: 'Tidak punya akses' })
   const outlet = outletPic(req)
   const rows = outlet
-    ? await db.prepare('SELECT id, nama, harga, outlet FROM produk WHERE outlet = ? ORDER BY id ASC').all(outlet)
-    : await db.prepare('SELECT id, nama, harga, outlet FROM produk ORDER BY id ASC').all()
+    ? await db.prepare('SELECT id, nama, harga, outlet, kategori, deskripsi FROM produk WHERE outlet = ? ORDER BY id ASC').all(outlet)
+    : await db.prepare('SELECT id, nama, harga, outlet, kategori, deskripsi FROM produk ORDER BY id ASC').all()
   const produk = rows.map((r) => ({
     id: r.id,
     nama: r.nama,
-    ket: namaOutlet(r.outlet) || r.outlet || '',
+    ket: r.deskripsi || namaOutlet(r.outlet) || r.outlet || '',
     harga: r.harga,
     outlet: r.outlet,
     tile: (r.nama || '?').trim().charAt(0).toUpperCase(),
-    kategori: namaOutlet(r.outlet) || r.outlet || '',
+    kategori: r.kategori || namaOutlet(r.outlet) || r.outlet || '',
     stok: null
   }))
   res.json({ produk, outlet: outlet || null })
 })
 
 posRouter.post('/produk', wajibLogin, wajibRole('admin', 'pic'), async (req, res) => {
-  const { nama, harga, outlet } = req.body || {}
+  const { nama, harga, outlet, kategori, deskripsi } = req.body || {}
   const nominal = Number(harga)
   const targetOutlet = req.user.role === 'pic' ? req.user.outlet : outlet
-  if (!nama || !Number.isInteger(nominal) || nominal <= 0) {
+  const productName = String(nama || '').trim()
+  const category = String(kategori || '').trim()
+  const description = String(deskripsi || '').trim()
+  if (!productName || productName.length > 120 || !Number.isInteger(nominal) || nominal <= 0 ||
+      category.length > 40 || description.length > 120) {
     return res.status(400).json({ error: 'Nama produk dan harga (>0) wajib diisi' })
   }
-  if (req.user.role === 'pic' ? !String(targetOutlet || '').trim() : !Object.values(OUTLET).includes(targetOutlet)) {
+  const registeredPicOutlet = req.user.role === 'admin' && targetOutlet
+    ? await db.prepare("SELECT id FROM users WHERE role = 'pic' AND outlet = ? LIMIT 1").get(String(targetOutlet).trim())
+    : null
+  const outletValid = req.user.role === 'pic'
+    ? Boolean(String(targetOutlet || '').trim())
+    : Object.values(OUTLET).includes(targetOutlet) || Boolean(registeredPicOutlet)
+  if (!outletValid) {
     return res.status(400).json({ error: 'Outlet produk tidak valid' })
   }
-  const info = await db.prepare('INSERT INTO produk (nama, harga, outlet) VALUES (?, ?, ?)').run(String(nama).trim(), nominal, targetOutlet)
-  const produk = await db.prepare('SELECT id, nama, harga, outlet FROM produk WHERE id = ?').get(info.lastInsertRowid)
+  const info = await db.prepare('INSERT INTO produk (nama, harga, outlet, kategori, deskripsi) VALUES (?, ?, ?, ?, ?)')
+    .run(productName, nominal, String(targetOutlet).trim(), category || null, description || null)
+  const produk = await db.prepare('SELECT id, nama, harga, outlet, kategori, deskripsi FROM produk WHERE id = ?').get(info.lastInsertRowid)
   await audit(req, 'BUAT_PRODUK', `${produk.nama} · Rp ${produk.harga.toLocaleString('id-ID')} · ${namaOutlet(produk.outlet)}`, 'produk', Number(produk.id))
   res.status(201).json({ message: 'Produk berhasil ditambahkan', produk })
 })
@@ -117,15 +128,19 @@ posRouter.put('/produk/:id', wajibLogin, wajibRole('admin', 'pic'), async (req, 
   const id = Number(req.params.id)
   const nama = String(req.body?.nama || '').trim()
   const harga = Number(req.body?.harga)
-  if (!Number.isInteger(id) || id <= 0 || !nama || nama.length > 120 || !Number.isInteger(harga) || harga <= 0) {
+  const kategori = String(req.body?.kategori || '').trim()
+  const deskripsi = String(req.body?.deskripsi || '').trim()
+  if (!Number.isInteger(id) || id <= 0 || !nama || nama.length > 120 || !Number.isInteger(harga) || harga <= 0 ||
+      kategori.length > 40 || deskripsi.length > 120) {
     return res.status(400).json({ error: 'ID, nama produk, dan harga valid wajib diisi' })
   }
   const product = await db.prepare('SELECT id, outlet FROM produk WHERE id = ?').get(id)
   if (!product) return res.status(404).json({ error: 'Produk tidak ditemukan' })
   if (req.user.role === 'pic' && product.outlet !== req.user.outlet) return res.status(403).json({ error: 'Produk bukan milik outlet akun PIC ini' })
-  await db.prepare('UPDATE produk SET nama = ?, harga = ? WHERE id = ?').run(nama, harga, id)
+  await db.prepare('UPDATE produk SET nama = ?, harga = ?, kategori = ?, deskripsi = ? WHERE id = ?')
+    .run(nama, harga, kategori || null, deskripsi || null, id)
   await audit(req, 'UBAH_PRODUK', `Produk #${id} diperbarui`, 'produk', id)
-  const updated = await db.prepare('SELECT id, nama, harga, outlet FROM produk WHERE id = ?').get(id)
+  const updated = await db.prepare('SELECT id, nama, harga, outlet, kategori, deskripsi FROM produk WHERE id = ?').get(id)
   res.json({ message: 'Produk berhasil diperbarui', produk: updated })
 })
 

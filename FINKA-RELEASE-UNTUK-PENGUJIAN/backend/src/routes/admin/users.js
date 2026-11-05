@@ -25,7 +25,7 @@ adminUsersRouter.get('/notifikasi', wajibLogin, hanyaAdmin, async (req, res) => 
 adminUsersRouter.get('/users', wajibLogin, hanyaAdmin, async (req, res) => {
   try {
     const list = await db.prepare(`
-      SELECT u.id, u.username, u.nama, u.role, u.outlet, u.active,
+      SELECT u.id, u.username, u.nama, u.role, u.outlet, u.outlet_hours AS outlet_jam, u.active,
              u.must_change_password AS wajib_ganti_password,
              (u.password_hash IS NOT NULL) AS password_terpasang,
              LOWER(up.hubungan) AS hubungan, up.pekerjaan, up.no_hp, up.email,

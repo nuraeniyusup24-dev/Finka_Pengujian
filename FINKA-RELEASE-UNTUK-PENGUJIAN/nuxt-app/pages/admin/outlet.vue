@@ -7,10 +7,14 @@ definePageMeta({
 
 <template>
   <div class="page">
+    <div v-if="dataError" class="data-error" role="alert">
+      <span>{{ dataError }}</span>
+      <button type="button" @click="muatData">Coba lagi</button>
+    </div>
     <div class="kiri">
       <button
         v-for="(o, i) in outlets"
-        :key="o.nama"
+        :key="o.key"
         class="card outlet"
         :class="outlet === i ? 'is-on' : ''"
         @click="setOutlet(i)"
@@ -31,7 +35,7 @@ definePageMeta({
     <div class="card tabel">
       <div class="tabel__head">
         <div>
-          <div class="h display">{{ outlets[outlet].nama }}</div>
+          <div class="h display">{{ outletAktif.nama }}</div>
           <div class="sub">Katalog produk dan paket</div>
         </div>
         <button v-if="admin" type="button" class="btn-sm" @click="bukaTambah">Tambah produk</button>
@@ -40,7 +44,8 @@ definePageMeta({
         <div>NAMA</div><div>KATEGORI</div><div>HARGA JUAL</div><div>STOK</div><div>STATUS</div>
         <div class="kanan">AKSI</div>
       </div>
-      <div v-if="!produk.length" class="kosong">
+      <div v-if="loadingData" class="kosong">Memuat outlet dan katalog produk…</div>
+      <div v-else-if="!produk.length" class="kosong">
         <b>Belum ada produk di katalog ini.</b>
         <span v-if="admin">Klik “Tambah produk” untuk mulai mengisi katalog.</span>
       </div>
@@ -67,9 +72,9 @@ definePageMeta({
       v-if="formOn"
       :key="edit ? edit.id : 'baru'"
       :produk="edit"
-      :outlet-nama="outlets[outlet].nama"
+      :outlet-nama="outletAktif.nama"
       :outlet-id="produkOutletId"
-      :contoh-kategori="produkOutletId === 1 ? 'ATK' : 'Minuman'"
+      :contoh-kategori="produkOutletId === 'koperasi' ? 'ATK' : 'Minuman'"
       @tutup="tutupForm"
       @berhasil="produkTersimpan"
     />
@@ -79,7 +84,7 @@ definePageMeta({
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" /><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2" /><path d="M19 6l-1 14a1 1 0 01-1 1H7a1 1 0 01-1-1L5 6" /><path d="M10 11v6M14 11v6" /></svg>
         </div>
         <h2 id="konfirmasi-judul">Yakin mau hapus menu ini?</h2>
-        <p><b>{{ hapus.nama }}</b> akan dihapus dari katalog {{ outlets[outlet].nama }} dan tidak muncul lagi di kasir. Tindakan ini tidak bisa dibatalkan.</p>
+        <p><b>{{ hapus.nama }}</b> akan dihapus dari katalog {{ outletAktif.nama }} dan tidak muncul lagi di kasir. Tindakan ini tidak bisa dibatalkan.</p>
         <div class="konfirmasi__aksi">
           <button type="button" class="konfirmasi__batal" @click="hapus = null">Batal</button>
           <button type="button" class="konfirmasi__hapus" @click="hapusProduk">Oke, hapus</button>
@@ -91,6 +96,14 @@ definePageMeta({
 </template>
 
 <script>
+import { api } from '~/utils/api'
+
+const OUTLET_DEFAULT = [
+  { key: 'kantin_utama', nama: 'Kantin Utama', jam: '07.00–14.00', pic: '—', trx: 214, omzet: 1840000 },
+  { key: 'kantin_b', nama: 'Kantin Blok B', jam: '09.00–13.30', pic: '—', trx: 97, omzet: 760000 },
+  { key: 'koperasi', nama: 'Koperasi Sekolah', jam: '07.00–15.00', pic: '—', trx: 36, omzet: 385000 }
+]
+
 export default {
 
   data() {
@@ -99,20 +112,69 @@ export default {
       edit: null, // produk yang sedang diubah (null = mode tambah)
       hapus: null, // produk yang menunggu konfirmasi hapus
       toast: null,
-      outlets: [
-        { nama: 'Kantin Utama', jam: '07.00–14.00', pic: 'Bu Ratna', trx: 214, omzet: 1840000 },
-        { nama: 'Kantin Blok B', jam: '09.00–13.30', pic: 'Bu Lilis', trx: 97, omzet: 760000 },
-        { nama: 'Koperasi Sekolah', jam: '07.00–15.00', pic: 'Pak Yusuf', trx: 36, omzet: 385000 }
-      ]
+      picUsers: [],
+      loadingData: true,
+      dataError: ''
     }
+  },
+  async mounted() {
+    await this.muatData()
   },
   computed: {
     admin() { return this.$store.getters['admin/admin'] },
     outlet() { return this.$store.state.admin.outlet },
-    produkOutletId() { return this.outlet === 2 ? 1 : 0 },
+    outlets() {
+      const picByOutlet = new Map()
+      this.picUsers.forEach((user) => {
+        const key = String(user.outlet || '').trim()
+        if (!key) return
+        const canonical = OUTLET_DEFAULT.find((item) =>
+          item.key.toLowerCase() === key.toLowerCase() || item.nama.toLowerCase() === key.toLowerCase()
+        )
+        const outletKey = canonical ? canonical.key : key
+        const current = picByOutlet.get(outletKey) || []
+        current.push({
+          nama: String(user.nama || '').replace(/^PIC\s+/i, '') || 'PIC',
+          jam: user.outlet_jam || ''
+        })
+        picByOutlet.set(outletKey, current)
+      })
+      const knownKeys = new Set(OUTLET_DEFAULT.map((item) => item.key))
+      const known = OUTLET_DEFAULT.map((item) => ({
+        ...item,
+        jam: (picByOutlet.get(item.key) || []).find((user) => user.jam)?.jam || item.jam,
+        pic: (picByOutlet.get(item.key) || [{ nama: item.pic }]).map((user) => user.nama).join(', ')
+      }))
+      const additional = Array.from(picByOutlet.entries())
+        .filter(([key]) => !knownKeys.has(key))
+        .map(([key, users]) => ({
+          key,
+          nama: key,
+          jam: users.find((user) => user.jam)?.jam || 'Jam operasional belum diatur',
+          pic: users.map((user) => user.nama).join(', '),
+          trx: 0,
+          omzet: 0
+        }))
+      return known.concat(additional)
+    },
+    outletAktif() { return this.outlets[this.outlet] || this.outlets[0] },
+    produkOutletId() { return this.outletAktif.key },
     produk() { return this.$store.getters.produkOutlet(this.produkOutletId) },
   },
   methods: {
+    async muatData() {
+      this.loadingData = true
+      this.dataError = ''
+      try {
+        const [users, dataProduk] = await Promise.all([api.adminUsers(), api.produk()])
+        this.picUsers = users.filter((user) => user.role === 'pic')
+        this.$store.commit('setProduk', dataProduk.produk || [])
+      } catch (error) {
+        this.dataError = error.message || 'Data outlet dan produk gagal dimuat.'
+      } finally {
+        this.loadingData = false
+      }
+    },
     setOutlet(i) { this.$store.commit('admin/setOutlet', i) },
     stokWarna(s) { return s === 0 ? 'var(--coral)' : s < 20 ? 'var(--sand-ink)' : 'var(--ink)' },
     bukaTambah() {
@@ -128,7 +190,7 @@ export default {
       this.edit = null
     },
     produkTersimpan({ nama, mode }) {
-      const outlet = this.outlets[this.outlet].nama
+      const outlet = this.outletAktif.nama
       const pesan = mode === 'ubah' ? nama + ' diperbarui.' : nama + ' ditambahkan ke ' + outlet + '.'
       this.toast = { id: Date.now(), pesan }
     },
@@ -136,7 +198,7 @@ export default {
       const { id, nama } = this.hapus
       this.$store.dispatch('hapusProduk', id)
       this.hapus = null
-      this.toast = { id: Date.now(), pesan: nama + ' dihapus dari ' + this.outlets[this.outlet].nama + '.' }
+      this.toast = { id: Date.now(), pesan: nama + ' dihapus dari ' + this.outletAktif.nama + '.' }
     }
   }
 }
@@ -144,27 +206,29 @@ export default {
 
 <style scoped>
 .page { display: grid; grid-template-columns: minmax(250px, 330px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.data-error { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid rgba(223, 74, 55, .24); border-radius: var(--r-sm); background: rgba(223, 74, 55, .06); color: var(--coral); font: 400 13px/1.5 var(--font-body); }
+.data-error button { flex: none; border: 0; border-radius: var(--r-sm); padding: 8px 12px; background: var(--blue); color: #fff; cursor: pointer; font: 600 12px var(--font-body); }
 .kiri {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: min(58vh, 520px);
+  max-height: calc(100vh - 220px);
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  padding: 2px 5px 2px 0;
+  padding: 2px 5px 12px 0;
 }
 .kiri::-webkit-scrollbar { width: 7px; }
 .kiri::-webkit-scrollbar-track { background: transparent; }
 .kiri::-webkit-scrollbar-thumb { border-radius: 8px; background: #cbd0dc; }
 .kiri::-webkit-scrollbar-thumb:hover { background: #aeb5c6; }
-.outlet { width: 100%; min-width: 0; }
+.outlet { width: 100%; min-width: 0; flex: 0 0 auto; }
 .outlet { padding: 16px; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 12px; background: #fff; }
 .outlet.is-on { border-color: var(--blue); }
-.outlet__top { display: flex; align-items: flex-start; justify-content: space-between; }
+.outlet__top { display: flex; align-items: flex-start; justify-content: space-between; min-width: 0; }
+.outlet__top > div { min-width: 0; }
 .outlet__nama { font: 700 14px var(--font-display); }
-.outlet__jam { font: 400 11.5px var(--font-body); color: var(--muted); margin-top: 3px; }
+.outlet__jam { font: 400 11.5px/1.45 var(--font-body); color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
 .outlet__stat { display: flex; gap: 20px; }
 .outlet__stat span { display: block; font: 400 11px var(--font-body); color: var(--muted); }
 .outlet__stat b { display: block; font: 700 14px var(--font-display); margin-top: 2px; }
@@ -223,13 +287,14 @@ export default {
   .kiri {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+    grid-auto-rows: max-content;
     align-content: start;
-    max-height: min(48vh, 420px);
+    max-height: calc(100vh - 220px);
   }
 }
 
 @media (max-width: 600px) {
-  .kiri { max-height: min(42vh, 320px); }
+  .kiri { max-height: calc(100dvh - 220px); padding-right: 0; }
 }
 
 @media (max-width: 760px) {

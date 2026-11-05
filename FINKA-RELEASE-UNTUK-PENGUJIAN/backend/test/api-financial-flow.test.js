@@ -59,6 +59,64 @@ test('API menguji batas role serta pembayaran bersamaan dan pembatalan ledger', 
   const usersResult = await api(baseUrl, picToken, '/api/admin/users')
   assert.equal(usersResult.response.status, 403)
 
+  const createdPic = await api(baseUrl, adminToken, '/api/admin/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      username: 'pic.gedung.a',
+      password: 'testing123',
+      nama: 'PIC Gedung A',
+      role: 'pic',
+      outlet: 'Kantin Gedung A',
+      outlet_jam: '07:30–14:30'
+    })
+  })
+  assert.equal(createdPic.response.status, 201, JSON.stringify(createdPic.body))
+  const picUsers = await api(baseUrl, adminToken, '/api/admin/users')
+  assert.equal(picUsers.response.status, 200)
+  assert.equal(picUsers.body.find(user => user.id === createdPic.body.user.id).outlet_jam, '07:30–14:30')
+  const picWithoutHours = await api(baseUrl, adminToken, '/api/admin/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      username: 'pic.tanpa.jam',
+      password: 'testing123',
+      nama: 'PIC Tanpa Jam',
+      role: 'pic',
+      outlet: 'Kantin Tanpa Jam'
+    })
+  })
+  assert.equal(picWithoutHours.response.status, 400)
+  const customProduct = await api(baseUrl, adminToken, '/api/pos/produk', {
+    method: 'POST',
+    body: JSON.stringify({ nama: 'Roti Gedung A', harga: 5000, outlet: 'Kantin Gedung A', kategori: 'Roti', deskripsi: 'Roti isi cokelat' })
+  })
+  assert.equal(customProduct.response.status, 201, JSON.stringify(customProduct.body))
+  assert.equal(customProduct.body.produk.kategori, 'Roti')
+  const updatedProduct = await api(baseUrl, adminToken, `/api/pos/produk/${customProduct.body.produk.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ nama: 'Roti Gedung A', harga: 6000, kategori: 'Camilan', deskripsi: 'Roti isi keju' })
+  })
+  assert.equal(updatedProduct.response.status, 200, JSON.stringify(updatedProduct.body))
+  assert.equal(updatedProduct.body.produk.deskripsi, 'Roti isi keju')
+  const unregisteredProduct = await api(baseUrl, adminToken, '/api/pos/produk', {
+    method: 'POST',
+    body: JSON.stringify({ nama: 'Produk tanpa outlet', harga: 5000, outlet: 'Outlet Tidak Terdaftar' })
+  })
+  assert.equal(unregisteredProduct.response.status, 400)
+  let customPicToken = await login(baseUrl, 'pic.gedung.a', 'testing123')
+  const firstPicProfile = await api(baseUrl, customPicToken, '/api/auth/me')
+  assert.equal(firstPicProfile.body.user.wajib_ganti_password, true)
+  assert.equal(firstPicProfile.body.user.wajib_buat_pin, false)
+  const changedPicPassword = await api(baseUrl, customPicToken, '/api/auth/ganti-password', {
+    method: 'POST',
+    body: JSON.stringify({ password_lama: 'testing123', password_baru: 'testing123-changed' })
+  })
+  assert.equal(changedPicPassword.response.status, 200, JSON.stringify(changedPicPassword.body))
+  customPicToken = await login(baseUrl, 'pic.gedung.a', 'testing123-changed')
+  const customCatalog = await api(baseUrl, customPicToken, '/api/pos/produk')
+  assert.equal(customCatalog.response.status, 200)
+  assert.equal(customCatalog.body.outlet, 'Kantin Gedung A')
+  assert.ok(customCatalog.body.produk.some(product => product.nama === 'Roti Gedung A' && product.kategori === 'Camilan' && product.ket === 'Roti isi keju'))
+
   const students = await api(baseUrl, adminToken, '/api/siswa')
   assert.equal(students.response.status, 200)
   const aditya = students.body.siswa.find(student => student.nama === 'Aditya Pratama')

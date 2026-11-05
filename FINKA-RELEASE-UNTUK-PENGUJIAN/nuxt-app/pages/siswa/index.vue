@@ -10,8 +10,8 @@ definePageMeta({
     <div class="atas">
       <div class="bar">
         <div class="logo">
-          <svg width="20" height="22" viewBox="0 0 40 44" fill="#fff" aria-hidden="true"><rect x="13" y="0" width="27" height="14" rx="6" /><rect x="0" y="10" width="14" height="14" rx="6" /><rect x="9" y="15" width="24" height="14" rx="6" /><rect x="4" y="30" width="14" height="14" rx="6" /></svg>
-          <span class="display">Finka</span>
+          <FinkaMark :width="20" :height="22" color="#fff" />
+          <span class="display">FINKA</span>
         </div>
         <div class="settings-wrap">
           <nuxt-link to="/siswa/pengaturan" class="settings-btn" aria-label="Pengaturan akun">
@@ -97,7 +97,7 @@ export default {
 .wrap { flex: 1; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; }
 .atas { padding: 14px 22px 26px; display: flex; flex-direction: column; gap: 26px; flex: none; }
 .bar { display: flex; align-items: center; justify-content: space-between; }
-.logo { display: flex; align-items: center; gap: 8px; color: #fff; font: 800 17px var(--font-display); }
+.logo { display: flex; align-items: center; gap: 8px; color: #fff; font: 800 17px var(--font-display); letter-spacing: .04em; }
 .who { display: flex; align-items: center; gap: 11px; }
 .av {
   width: 38px; height: 38px; flex: none; overflow: hidden; border-radius: var(--r-pill);

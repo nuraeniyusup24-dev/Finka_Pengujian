@@ -92,3 +92,57 @@ export const TEMPLAT_IMPOR = [
   ['Raka Wulandari', '25010002', '7B', 'Contoh-Raka-852!', 'Bapak Hadi', '', 'Contoh-Ortu-741!'],
   ['Sinta Putri', '25010003', '7A', 'Contoh-Sinta-963!', 'Ibu Dewi', '', 'Contoh-Ortu-963!']
 ]
+
+const KUNCI_PIC = {
+  nama_pic: ['namapic', 'namakasir', 'namapetugas'],
+  username_pic: ['usernamepic', 'usernamekasir', 'username'],
+  password_sementara: ['passwordsementara', 'passwordawal', 'passwordpic', 'password'],
+  nama_outlet: ['namaoutlet', 'outlet', 'namakantin'],
+  jam_buka: ['jambuka', 'bukapukul', 'mulaioperasional'],
+  jam_tutup: ['jamtutup', 'tutuppukul', 'akhiroperasional'],
+  nama_menu: ['namamenu', 'namaproduk', 'menu', 'produk'],
+  kategori: ['kategori', 'jenismenu'],
+  harga: ['harga', 'hargajual'],
+  deskripsi: ['deskripsi', 'keterangan', 'ket']
+}
+
+export const TEMPLAT_IMPOR_PIC = [
+  ['nama_pic', 'username_pic', 'password_sementara', 'nama_outlet', 'jam_buka', 'jam_tutup', 'nama_menu', 'kategori', 'harga', 'deskripsi'],
+  ['Sari Wulandari', 'pic.kantin.sari', 'Ganti-Saya-2026!', 'Kantin Gedung A', '07:00', '14:00', 'Nasi goreng', 'Makanan', '12000', 'Nasi goreng telur'],
+  ['Sari Wulandari', 'pic.kantin.sari', 'Ganti-Saya-2026!', 'Kantin Gedung A', '07:00', '14:00', 'Es teh', 'Minuman', '4000', 'Es teh manis']
+]
+
+function formatJamImpor(value) {
+  const text = String(value ?? '').trim()
+  const jamText = text.match(/^(\d{1,2}):([0-5]\d)$/)
+  if (jamText && Number(jamText[1]) <= 23) return `${jamText[1].padStart(2, '0')}:${jamText[2]}`
+
+  const fraction = Number(text)
+  if (text && Number.isFinite(fraction) && fraction >= 0 && fraction < 1) {
+    const minutes = Math.round(fraction * 24 * 60) % (24 * 60)
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+  }
+  return text
+}
+
+export function petakanImporPic({ rows, lines }) {
+  if (!rows.length) return { baris: [], galat: 'File kosong.' }
+  const norm = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const kepala = rows[0].map(norm)
+  const idx = {}
+  for (const [key, alias] of Object.entries(KUNCI_PIC)) idx[key] = kepala.findIndex((h) => alias.includes(h))
+  const wajib = Object.keys(KUNCI_PIC).filter((key) => key !== 'deskripsi')
+  const hilang = wajib.filter((key) => idx[key] < 0)
+  if (hilang.length) return { baris: [], galat: 'Kolom wajib tidak ditemukan di baris pertama: ' + hilang.join(', ') + '. Gunakan templat PIC.' }
+  const baris = rows.slice(1).map((row, i) => {
+    const data = { no: lines[i + 1] }
+    for (const key of Object.keys(KUNCI_PIC)) {
+      data[key] = idx[key] >= 0 ? String(row[idx[key]] ?? '').trim() : ''
+    }
+    data.jam_buka = formatJamImpor(data.jam_buka)
+    data.jam_tutup = formatJamImpor(data.jam_tutup)
+    return data
+  })
+  if (!baris.length) return { baris: [], galat: 'File hanya berisi baris judul, belum ada data PIC dan menu.' }
+  return { baris, galat: '' }
+}

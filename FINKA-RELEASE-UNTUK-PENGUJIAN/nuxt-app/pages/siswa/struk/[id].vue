@@ -12,7 +12,7 @@ definePageMeta({
     <div v-else-if="$store.state['profil-siswa'].error" class="state error" role="alert">{{ $store.state['profil-siswa'].error }} <button type="button" @click="muat">Coba lagi</button></div>
     <div v-else-if="!trx" class="state">Detail transaksi tidak ditemukan.</div>
     <div v-else-if="trx" class="sheet">
-      <div class="brand"><span class="brand__mark">F</span><span class="display">Finka</span><i>STRUK DIGITAL</i></div>
+      <div class="brand"><FinkaMark :width="20" :height="22" color="var(--blue)" /><span class="display">FINKA</span><i>STRUK DIGITAL</i></div>
       <div class="head">
         <div class="cek">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
@@ -70,8 +70,7 @@ export default {
 .state { padding:32px 20px; text-align:center; color:var(--muted); font:500 13px/1.5 var(--font-body); }
 .error { color:var(--coral); }
 .state button { border:0; background:transparent; color:var(--blue); font-weight:700; cursor:pointer; }
-.brand { display:flex; align-items:center; gap:8px; color:var(--navy); font:700 15px var(--font-display); }
-.brand__mark { width:27px; height:27px; border-radius:9px; display:grid; place-items:center; background:var(--blue); color:#fff; font:800 14px var(--font-display); }
+.brand { display:flex; align-items:center; gap:8px; color:var(--navy); font:700 15px var(--font-display); letter-spacing:.04em; }
 .brand i { margin-left:auto; color:var(--muted); font:600 9px var(--font-body); letter-spacing:.12em; font-style:normal; }
 .head { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .cek { width: 48px; height: 48px; border-radius: var(--r-pill); background: rgba(26,128,64,.12); display: flex; align-items: center; justify-content: center; }

@@ -8,8 +8,8 @@ definePageMeta({
   <div class="wrap">
     <div class="body">
       <div class="logo">
-        <svg width="26" height="28" viewBox="0 0 40 44" fill="var(--blue)"><rect x="13" y="0" width="27" height="14" rx="6" /><rect x="0" y="10" width="14" height="14" rx="6" /><rect x="9" y="15" width="24" height="14" rx="6" /><rect x="4" y="30" width="14" height="14" rx="6" /></svg>
-        <span class="display">Finka</span>
+        <FinkaMark :width="26" :height="28" color="var(--blue)" />
+        <span class="display">FINKA</span>
       </div>
       <div class="judul display">Masuk</div>
       <p class="ket">Masuk dengan username dan password akun Finka Anda untuk diarahkan sesuai peran (Admin, Orang Tua, Siswa, atau Kantin).</p>
@@ -75,7 +75,7 @@ export default {
 <style scoped>
 .wrap { flex: 1; display: flex; flex-direction: column; background: #fff; min-height: 0; }
 .body { flex: 1; overflow-y: auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 4px; }
-.logo { display: flex; align-items: center; gap: 10px; font: 800 18px var(--font-display); color: var(--ink); margin-bottom: 20px; }
+.logo { display: flex; align-items: center; gap: 10px; font: 800 18px var(--font-display); letter-spacing: .04em; color: var(--ink); margin-bottom: 20px; }
 .judul { font: 800 22px var(--font-display); }
 .ket { margin: 6px 0 24px; font: 400 13px/1.5 var(--font-body); color: var(--muted); text-wrap: pretty; }
 

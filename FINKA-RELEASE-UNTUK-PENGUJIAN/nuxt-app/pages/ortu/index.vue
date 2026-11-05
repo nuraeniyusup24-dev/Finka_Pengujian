@@ -11,8 +11,8 @@ definePageMeta({
       <header class="top">
         <div class="top__bar">
           <div class="logo">
-            <svg width="20" height="22" viewBox="0 0 40 44" fill="var(--blue)"><rect x="13" y="0" width="27" height="14" rx="6" /><rect x="0" y="10" width="14" height="14" rx="6" /><rect x="9" y="15" width="24" height="14" rx="6" /><rect x="4" y="30" width="14" height="14" rx="6" /></svg>
-            <span class="display">Finka</span>
+            <FinkaMark :width="20" :height="22" color="var(--blue)" />
+            <span class="display">FINKA</span>
           </div>
           <div class="top__actions">
             <nuxt-link to="/ortu/notifikasi" class="bell" aria-label="Notifikasi">
@@ -181,7 +181,7 @@ export default {
 .top { background: #fff; padding: 8px 20px 22px; display: flex; flex-direction: column; gap: 20px; }
 .top__bar { display: flex; align-items: center; justify-content: space-between; }
 .top__actions { display: flex; align-items: center; gap: 8px; }
-.logo { display: flex; align-items: center; gap: 10px; font: 800 17px var(--font-display); color: var(--ink); }
+.logo { display: flex; align-items: center; gap: 10px; font: 800 17px var(--font-display); letter-spacing: .04em; color: var(--ink); }
 .bell {
   position: relative; width: 38px; height: 38px; border-radius: var(--r-pill);
   background: var(--bg); display: flex; align-items: center; justify-content: center;

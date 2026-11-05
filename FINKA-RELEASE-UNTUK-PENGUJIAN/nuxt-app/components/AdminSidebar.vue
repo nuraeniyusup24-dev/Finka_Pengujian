@@ -1,8 +1,8 @@
 <template>
   <aside class="side">
     <div class="brand">
-      <svg width="22" height="24" viewBox="0 0 40 44" fill="#FFFFFF"><rect x="13" y="0" width="27" height="14" rx="6" /><rect x="0" y="10" width="14" height="14" rx="6" /><rect x="9" y="15" width="24" height="14" rx="6" /><rect x="4" y="30" width="14" height="14" rx="6" /></svg>
-      <div class="brand__name display">Finka</div>
+      <FinkaMark :width="22" :height="24" color="#FFFFFF" />
+      <div class="brand__name display">FINKA</div>
       <div class="brand__tag">YAYASAN</div>
     </div>
 
@@ -100,7 +100,7 @@ export default {
   display: flex; flex-direction: column; padding: 22px 0;
 }
 .brand { display: flex; align-items: center; gap: 11px; padding: 0 22px 26px; }
-.brand__name { font: 800 18px var(--font-display); color: #fff; }
+.brand__name { font: 800 18px var(--font-display); letter-spacing: .04em; color: #fff; }
 .brand__tag {
   font: 500 10px var(--font-body); color: var(--sand);
   border: 1px solid rgba(192,169,127,.4); padding: 2px 6px;
