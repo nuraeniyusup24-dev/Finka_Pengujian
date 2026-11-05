@@ -3,10 +3,9 @@ import { Router } from 'express'
 export const configRouter = Router()
 
 configRouter.get('/pembayaran', (req, res) => {
-  const rekening = {
-    bank: process.env.PAYMENT_BANK_NAME || 'BCA',
-    nomor: process.env.PAYMENT_BANK_ACCOUNT || '872 011 4556',
-    atas_nama: process.env.PAYMENT_ACCOUNT_HOLDER || 'Yayasan Nurul Ilmi'
-  }
-  res.json({ rekening })
+  const bank = String(process.env.PAYMENT_BANK_NAME || '').trim()
+  const nomor = String(process.env.PAYMENT_BANK_ACCOUNT || '').trim()
+  const atasNama = String(process.env.PAYMENT_ACCOUNT_HOLDER || '').trim()
+  if (!bank || !nomor || !atasNama) return res.json({ rekening: null })
+  res.json({ rekening: { bank, nomor, atas_nama: atasNama } })
 })

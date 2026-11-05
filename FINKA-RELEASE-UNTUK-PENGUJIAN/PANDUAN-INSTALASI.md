@@ -2,7 +2,16 @@
 
 ## 1. Siapkan perangkat
 
-Pasang Node.js `^22.22.3`, `^24.15.0`, atau `>=26.0.0` agar satu versi kompatibel dengan frontend Nuxt 4.6.3 dan backend. Periksa versi di PowerShell dengan `node --version`; versi di luar rentang tersebut belum didukung meskipun sebagian perintah mungkin berjalan. **PostgreSQL tidak diperlukan**: backend memakai SQLite yang sudah ada di dalam Node.js. Buka PowerShell pada folder hasil ekstrak ZIP.
+Pasang Node.js `^22.22.3`, `^24.15.0`, atau `>=26.0.0` agar satu versi kompatibel dengan frontend Nuxt 4.6.4 dan backend. Periksa versi di PowerShell dengan `node --version`; versi di luar rentang tersebut belum didukung meskipun sebagian perintah mungkin berjalan. **PostgreSQL tidak diperlukan**: backend memakai SQLite yang sudah ada di dalam Node.js.
+
+Pastikan PowerShell berada di folder proyek yang berisi folder `backend` dan `nuxt-app`. Jika hasil ekstrak memiliki folder pembungkus seperti `FINKA-RELEASE-UNTUK-PENGUJIAN`, masuk ke folder itu terlebih dahulu:
+
+```powershell
+Set-Location .\FINKA-RELEASE-UNTUK-PENGUJIAN
+Test-Path .\nuxt-app\package.json
+```
+
+Perintah terakhir harus menampilkan `True`. Jalankan langkah selanjutnya dari folder proyek tersebut, bukan dari folder `Downloads` atau folder pembungkus di luarnya.
 
 ## 2. Atur backend
 
@@ -33,6 +42,18 @@ npm run dev
 ```
 
 Health check: buka `http://localhost:3001/api/health`; hasil normal `{"ok":true}`. Biarkan terminal ini berjalan. Jangan menjalankan `npm run smoke-test` atau skrip penghapusan pada data yang ingin dipertahankan (smoke test menambah data uji).
+
+Jika PowerShell menampilkan prompt lanjutan `>>` alih-alih prompt biasa, tekan `Ctrl+C` satu kali untuk membatalkan masukan sebelumnya, lalu jalankan perintah berikutnya setelah prompt normal muncul.
+
+Jika `npm ci` menampilkan `EPERM` saat menghapus file di `nuxt-app\node_modules` lalu `nuxt is not recognized`, instalasi dependency terhenti karena Windows tidak dapat mengganti file yang sedang dipakai (biasanya karena server Nuxt lama masih berjalan). Tekan `Ctrl+C` di terminal frontend yang sedang menjalankan Nuxt. Setelah server berhenti, kembali ke folder proyek dan ulangi:
+
+```powershell
+Set-Location .\nuxt-app
+npm ci
+npm run dev
+```
+
+Peringatan `EBADENGINE` bukan penyebab `EPERM`; perbarui Node.js ke versi yang didukung sebelum penggunaan jangka panjang.
 
 ## 4. Jalankan frontend
 

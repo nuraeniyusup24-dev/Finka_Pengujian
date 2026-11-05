@@ -24,12 +24,16 @@ for (const file of checked) {
 
 const forbiddenEnvFiles = ['.env', '.env.local', '.env.production'].map((name) => resolve(root, name));
 for (const file of forbiddenEnvFiles) {
-  if (existsSync(file)) failures.push(`File rahasia tidak boleh ada dalam paket: ${relative(root, file)}`);
+  if (!existsSync(file)) continue;
+  const path = relative(root, file);
+  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', path], { cwd: root, encoding: 'utf8' }).status === 0;
+  const ignored = spawnSync('git', ['check-ignore', '--no-index', '--quiet', '--', path], { cwd: root, encoding: 'utf8' }).status === 0;
+  if (tracked || !ignored) failures.push(`File rahasia tidak boleh ada dalam paket: ${path}`);
 }
 
 if (failures.length) {
   console.error(`Static check gagal (${failures.length} temuan):\n\n${failures.join('\n\n')}`);
   process.exitCode = 1;
 } else {
-  console.log(`Static check lulus: ${checked.length} file JavaScript lolos node --check; tidak ada .env root yang terdeteksi.`);
+  console.log(`Static check lulus: ${checked.length} file JavaScript lolos node --check; tidak ada file environment yang terlacak atau tidak diabaikan Git.`);
 }

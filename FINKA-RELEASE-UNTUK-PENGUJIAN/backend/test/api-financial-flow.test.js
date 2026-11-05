@@ -34,6 +34,9 @@ test('API menguji batas role serta pembayaran bersamaan dan pembatalan ledger', 
   process.env.DB_PATH = dbPath
   process.env.JWT_SECRET = 'api-test-jwt-secret'
   process.env.PIN_OTP_SECRET = 'api-test-pin-otp-secret'
+  process.env.PAYMENT_BANK_NAME = ''
+  process.env.PAYMENT_BANK_ACCOUNT = ''
+  process.env.PAYMENT_ACCOUNT_HOLDER = ''
   const { db, initDb, ensureDemoData } = await import('../src/db.js')
   const { startServer } = await import('../src/server.js')
   await initDb()
@@ -54,6 +57,21 @@ test('API menguji batas role serta pembayaran bersamaan dan pembatalan ledger', 
   })
 
   const adminToken = await login(baseUrl, 'admin', 'admin123')
+  const unconfiguredPayment = await api(baseUrl, adminToken, '/api/config/pembayaran')
+  assert.equal(unconfiguredPayment.response.status, 200)
+  assert.equal(unconfiguredPayment.body.rekening, null)
+  process.env.PAYMENT_BANK_NAME = 'Bank Uji'
+  process.env.PAYMENT_BANK_ACCOUNT = '0000001234'
+  process.env.PAYMENT_ACCOUNT_HOLDER = 'Akun Pengujian'
+  const configuredPayment = await api(baseUrl, adminToken, '/api/config/pembayaran')
+  assert.deepEqual(configuredPayment.body.rekening, {
+    bank: 'Bank Uji',
+    nomor: '0000001234',
+    atas_nama: 'Akun Pengujian'
+  })
+  process.env.PAYMENT_BANK_NAME = ''
+  process.env.PAYMENT_BANK_ACCOUNT = ''
+  process.env.PAYMENT_ACCOUNT_HOLDER = ''
   const picToken = await login(baseUrl, 'pic.kantin.utama', 'pic123')
   const studentToken = await login(baseUrl, 'aditya.p', 'siswa123')
   const usersResult = await api(baseUrl, picToken, '/api/admin/users')

@@ -34,6 +34,9 @@ export default {
       apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3001/api'
     }
   },
+  devServer: {
+    host: 'localhost'
+  },
   components: true,
   experimental: {
     componentIslands: false
