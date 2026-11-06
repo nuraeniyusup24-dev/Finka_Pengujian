@@ -54,6 +54,39 @@ adminBillingRouter.get('/tagihan', wajibLogin, hanyaAdmin, async (req, res) => {
   }
 })
 
+adminBillingRouter.post('/tagihan/pengingat', wajibLogin, hanyaAdmin, async (req, res) => {
+  try {
+    const hasil = await db.transaction(async () => {
+      const rows = await db.prepare(`
+        SELECT t.id, t.siswa_id, t.nama, t.nominal, t.jatuh_tempo,
+               sp.ortu_id, s.nama AS siswa_nama
+        FROM tagihan t
+        JOIN siswa_profil sp ON sp.user_id = t.siswa_id
+        JOIN users s ON s.id = t.siswa_id
+        WHERE t.status = 'belum_bayar' AND sp.ortu_id IS NOT NULL
+        ORDER BY t.id ASC
+      `).all()
+      const insert = await db.prepare(`INSERT INTO parent_notifications
+        (ortu_id, siswa_id, tagihan_id, tipe, judul, pesan)
+        VALUES (?, ?, ?, 'pengingat_tagihan', ?, ?)`)
+      const parents = new Set()
+      for (const row of rows) {
+        const judul = 'Pengingat pembayaran: ' + row.nama
+        const nominal = Number(row.nominal).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })
+        const pesan = `${row.siswa_nama}: tagihan ${row.nama} sebesar ${nominal} belum dibayar${row.jatuh_tempo ? ` dan jatuh tempo ${row.jatuh_tempo}` : ''}.`
+        await insert.run(row.ortu_id, row.siswa_id, row.id, judul, pesan)
+        parents.add(row.ortu_id)
+      }
+      return { jumlah_tagihan: rows.length, jumlah_ortu: parents.size }
+    })()
+    await audit(req, 'KIRIM_PENGINGAT_TAGIHAN', `${hasil.jumlah_tagihan} pengingat ke ${hasil.jumlah_ortu} orang tua`, 'tagihan', null)
+    res.json({ ok: true, ...hasil })
+  } catch (error) {
+    console.error('Gagal mengirim pengingat tagihan:', error)
+    res.status(500).json({ error: 'Gagal mengirim pengingat tagihan' })
+  }
+})
+
 // Tagihan hanya dapat diedit sebelum lunas. Perubahan nominal/nama/tenggat
 // dikunci dalam transaksi agar tidak mengubah tagihan yang sedang dibayar.
 adminBillingRouter.put('/tagihan/:id', wajibLogin, hanyaAdmin, async (req, res) => {

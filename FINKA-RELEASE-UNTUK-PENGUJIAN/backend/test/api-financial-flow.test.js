@@ -144,6 +144,32 @@ test('API menguji batas role serta pembayaran bersamaan dan pembatalan ledger', 
   const crossAccount = await api(baseUrl, studentToken, `/api/siswa/${kayla.id}/saldo`)
   assert.equal(crossAccount.response.status, 403)
 
+  const parentToken = await login(baseUrl, 'ortu.sari', 'ortu123')
+  const issued = await api(baseUrl, adminToken, '/api/admin/tagihan/bulk', {
+    method: 'POST',
+    body: JSON.stringify({
+      nama: 'SPP Integrasi',
+      nominal: 275000,
+      jatuh_tempo: '2026-12-10',
+      siswa_ids: [aditya.id],
+      kirim_notifikasi: true
+    })
+  })
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.body))
+  assert.equal(issued.body.notifikasi_terkirim, 1)
+  const parentBills = await api(baseUrl, parentToken, `/api/tagihan?siswa_id=${aditya.id}`)
+  assert.ok(parentBills.body.tagihan.some(item => item.nama === 'SPP Integrasi'))
+  const issuedNotifications = await api(baseUrl, parentToken, '/api/ortu/notifikasi')
+  const issuedNotification = issuedNotifications.body.notifikasi.find(item => item.tipe === 'tagihan_diterbitkan')
+  assert.ok(issuedNotification)
+  assert.equal(issuedNotification.tagihan_id, parentBills.body.tagihan.find(item => item.nama === 'SPP Integrasi').id)
+
+  const reminder = await api(baseUrl, adminToken, '/api/admin/tagihan/pengingat', { method: 'POST', body: '{}' })
+  assert.equal(reminder.response.status, 200, JSON.stringify(reminder.body))
+  assert.ok(reminder.body.jumlah_tagihan >= 1)
+  const remindedNotifications = await api(baseUrl, parentToken, '/api/ortu/notifikasi')
+  assert.ok(remindedNotifications.body.notifikasi.some(item => item.tipe === 'pengingat_tagihan'))
+
   const bills = await api(baseUrl, adminToken, `/api/tagihan?siswa_id=${aditya.id}`)
   assert.equal(bills.response.status, 200)
   const bill = bills.body.tagihan.find(item => item.status === 'belum_bayar')

@@ -296,6 +296,19 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_tagihan_siswa ON tagihan(siswa_id);
 
+    CREATE TABLE IF NOT EXISTS parent_notifications (
+      id ${ID},
+      ortu_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      siswa_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tagihan_id INTEGER REFERENCES tagihan(id) ON DELETE SET NULL,
+      tipe TEXT NOT NULL,
+      judul TEXT NOT NULL,
+      pesan TEXT NOT NULL,
+      created_at ${TS}
+    );
+    CREATE INDEX IF NOT EXISTS idx_parent_notifications_parent
+      ON parent_notifications(ortu_id, id DESC);
+
     CREATE TABLE IF NOT EXISTS topup_request (
       id ${ID},
       siswa_id INTEGER NOT NULL REFERENCES users(id),

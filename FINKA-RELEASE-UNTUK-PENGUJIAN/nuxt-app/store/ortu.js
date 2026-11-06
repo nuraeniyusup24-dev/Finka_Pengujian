@@ -52,7 +52,8 @@ export const getters = {
       }
     })
 
-    g.tagihanSemua.filter((t) => t.status === 'belum_bayar').forEach((t) => {
+    const tagihanSudahDiberitahu = new Set(s.notifikasiStatus.map((n) => String(n.tagihan_id || '')).filter(Boolean))
+    g.tagihanSemua.filter((t) => t.status === 'belum_bayar' && !tagihanSudahDiberitahu.has(String(t.id))).forEach((t) => {
       const jatuhTempo = t.jatuh_tempo ? new Date(`${t.jatuh_tempo}T23:59:59`) : null
       let judul = 'Tagihan belum dibayar'
       let isi = `${t.anakNama}: ${t.nama} sebesar ${Number(t.nominal || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}.`
@@ -76,7 +77,7 @@ export const getters = {
     return out.sort((a, b) => a.prioritas - b.prioritas)
   },
   jumlahNotifikasi: (s, g) => g.notifikasi.length + s.notifikasiStatus.length,
-  semuaNotifikasi: (s, g) => g.notifikasi.concat(s.notifikasiStatus),
+  semuaNotifikasi: (s, g) => s.notifikasiStatus.concat(g.notifikasi),
   riwayatAktif: (s, g) => (g.aktif ? s.riwayat[g.aktif.id] || [] : [])
 }
 

@@ -34,6 +34,8 @@ definePageMeta({
 
       <section>
         <div class="h display">Penerima</div>
+        <div v-if="memuatSiswa" class="pesan">Memuat daftar siswa...</div>
+        <div v-else-if="apiError" class="pesan pesan--error" role="alert">{{ apiError }}</div>
         <div class="target">
           <button
             v-for="(t, i) in ['Per kelas', 'Per angkatan', 'Semua siswa']"
@@ -56,6 +58,10 @@ definePageMeta({
             </span>
             {{ k.kelas }} ({{ k.n }})
           </button>
+          <div v-if="!memuatSiswa && !kelas.length" class="pesan">Belum ada akun siswa aktif yang dapat ditagih.</div>
+        </div>
+        <div v-if="siswaTanpaOrtu" class="pesan pesan--warning">
+          {{ siswaTanpaOrtu }} siswa belum terhubung ke akun orang tua. Tagihan mereka tidak dapat tampil pada akun orang tua.
         </div>
       </section>
 
@@ -169,7 +175,7 @@ definePageMeta({
             <div class="hero__bank">BCA 872 011 4556 · a.n. Yayasan Nurul Ilmi</div>
           </div>
 
-          <p class="fine">Kode unik 3 digit dibuat otomatis per orang tua saat invoice diterbitkan. Tagihan lunas setelah admin memverifikasi bukti transfer.</p>
+          <p class="fine">Penerbitan tagihan akan menghubungkannya ke akun orang tua melalui profil siswa. Pembayaran transfer diverifikasi oleh admin.</p>
         </div>
       </div>
 
@@ -181,6 +187,7 @@ definePageMeta({
         <div class="garis"></div>
         <div class="ringkas__total"><span>Total diterbitkan</span><b class="display num">{{ total | rp }}</b></div>
 
+        <div v-if="apiError" class="pesan pesan--error" role="alert">{{ apiError }}</div>
         <div v-if="draft.terbit" class="sukses">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
           <p>{{ pesanSukses }}</p>
@@ -188,8 +195,8 @@ definePageMeta({
 
         <div v-if="admin" class="ringkas__aksi">
           <nuxt-link to="/admin/tagihan" class="btn-sm btn-sm--ghost">Batal</nuxt-link>
-          <button class="btn-sm btn-sm--primary" :disabled="!valid" @click="terbitkan">
-            {{ draft.terbit ? 'Terbitkan lagi' : 'Terbitkan ' + $num(jumlah) + ' invoice' }}
+          <button class="btn-sm btn-sm--primary" :disabled="!valid || submitting || draft.terbit || memuatSiswa" @click="terbitkan">
+            {{ submitting ? 'Menerbitkan...' : draft.terbit ? 'Tagihan diterbitkan' : 'Terbitkan ' + $num(jumlah) + ' tagihan' }}
           </button>
         </div>
         <div v-else class="kunci">
@@ -202,12 +209,19 @@ definePageMeta({
 </template>
 
 <script>
+import { api } from '~/utils/api'
+
 export default {
 
   data() {
     return {
+      siswa: [],
+      memuatSiswa: true,
+      submitting: false,
+      apiError: '',
+      hasilTerbit: null,
       opsi: [
-        { k: 'kirimNotif', label: 'Kirim notifikasi ke orang tua', ket: 'Push dan email saat invoice terbit' },
+        { k: 'kirimNotif', label: 'Kirim notifikasi ke orang tua', ket: 'Notifikasi muncul di aplikasi orang tua saat tagihan terbit' },
         { k: 'dendaOn', label: 'Denda keterlambatan', ket: 'Rp 25.000 setelah jatuh tempo' },
         { k: 'cicilan', label: 'Izinkan cicilan', ket: 'Orang tua boleh bayar bertahap' }
       ]
@@ -216,13 +230,57 @@ export default {
   computed: {
     admin() { return this.$store.getters['admin/admin'] },
     draft() { return this.$store.state.admin.draft },
-    kelas() { return this.$store.state.admin.kelas },
-    jenisTagihan() { return this.$store.state.admin.jenisTagihan },
-    tempoOpsi() { return this.$store.state.admin.tempoOpsi },
-    contoh() { return this.$store.getters['admin/contohPenerima'] },
-    jumlah() { return this.$store.getters['admin/jumlahPenerima'] },
-    total() { return this.$store.getters['admin/totalTerbit'] },
-    valid() { return this.jumlah > 0 && this.draft.nominal > 0 },
+    kelas() {
+      const byClass = new Map()
+      this.siswa.forEach((s) => {
+        const kelas = String(s.kelas || 'Tanpa kelas').trim()
+        byClass.set(kelas, (byClass.get(kelas) || 0) + 1)
+      })
+      return [...byClass.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0], 'id', { numeric: true }))
+        .map(([kelas, n]) => ({ kelas, n }))
+    },
+    jenisTagihan() {
+      const current = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+      return this.$store.state.admin.jenisTagihan.map((item, index) => (
+        index === 0 ? Object.assign({}, item, { periode: 'Periode ' + current }) : item
+      ))
+    },
+    tempoOpsi() {
+      const now = new Date()
+      const plusDays = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7)
+      const dayTen = new Date(now.getFullYear(), now.getMonth(), 10)
+      if (dayTen < new Date(now.getFullYear(), now.getMonth(), now.getDate())) dayTen.setMonth(dayTen.getMonth() + 1)
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      return [
+        { label: '7 hari', date: plusDays },
+        { label: 'Tanggal 10', date: dayTen },
+        { label: 'Akhir bulan', date: monthEnd }
+      ].map((item) => ({
+        label: item.label,
+        tanggal: item.date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+        ket: item.date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+        iso: `${item.date.getFullYear()}-${String(item.date.getMonth() + 1).padStart(2, '0')}-${String(item.date.getDate()).padStart(2, '0')}`
+      }))
+    },
+    penerima() {
+      const kelasDipilih = this.draft.kelasPilih
+      const angkatan = kelasDipilih.map((kelas) => kelas[0])
+      return this.siswa.filter((s) => {
+        const kelas = String(s.kelas || 'Tanpa kelas').trim()
+        if (this.draft.target === 2) return true
+        if (this.draft.target === 1) return angkatan.includes(kelas[0])
+        return kelasDipilih.includes(kelas)
+      })
+    },
+    contoh() {
+      const siswa = this.penerima[0] || this.siswa[0] || {}
+      return { kelas: siswa.kelas || '—', siswa: siswa.nama || '—', nis: siswa.nis || '—', ortu: siswa.ortu_nama || 'Orang tua belum terhubung' }
+    },
+    jumlah() { return this.penerima.length },
+    total() { return Number(this.draft.nominal || 0) * this.jumlah },
+    siswaTanpaOrtu() { return this.penerima.filter((s) => !s.ortu_id).length },
+    valid() { return this.jumlah > 0 && this.draft.nominal > 0 && Number.isSafeInteger(Number(this.draft.nominal)) },
     nominalStr() { return this.$num(this.draft.nominal) },
     dasarStr() { return this.$num(this.draft.nominal + 110).slice(0, -3) },
     kodeStr() { return this.$num(this.draft.nominal + 110).slice(-3) },
@@ -234,26 +292,71 @@ export default {
       ]
     },
     penerimaLabel() {
-      if (this.draft.target === 2) return 'Semua kelas (1.284 siswa)'
-      const dipilih = this.$store.getters['admin/kelasTerpilih']
+      if (this.draft.target === 2) return 'Semua siswa aktif'
       if (this.draft.target === 1) {
-        const ang = dipilih.map((k) => k.kelas[0]).filter((v, i, a) => a.indexOf(v) === i)
+        const ang = this.draft.kelasPilih.map((k) => k[0]).filter((v, i, a) => a.indexOf(v) === i)
         return 'Angkatan ' + (ang.length ? ang.join(', ') : 'belum dipilih')
       }
       return this.draft.kelasPilih.length ? this.draft.kelasPilih.join(', ') : 'Belum dipilih'
     },
     pesanSukses() {
-      return this.$num(this.jumlah) + ' invoice diterbitkan senilai ' + this.$rp(this.total) +
-        '. Kode unik per orang tua sudah dibuat' + (this.draft.kirimNotif ? ' dan notifikasi terkirim.' : '.')
+      const hasil = this.hasilTerbit
+      if (!hasil) return 'Tagihan berhasil diterbitkan.'
+      return `${this.$num(hasil.jumlah)} tagihan berhasil diterbitkan. ${this.$num(hasil.notifikasi_terkirim)} notifikasi masuk ke akun orang tua.` +
+        (hasil.siswa_tanpa_ortu ? ` ${this.$num(hasil.siswa_tanpa_ortu)} siswa belum terhubung ke orang tua.` : '')
+    }
+  },
+  async mounted() {
+    try {
+      const users = await api.adminUsers()
+      if (!Array.isArray(users)) throw new Error('Format data siswa dari server tidak valid.')
+      this.siswa = users.filter((user) => user.role === 'siswa' && Number(user.active) === 1)
+    } catch (error) {
+      this.apiError = error.message || 'Gagal memuat daftar siswa.'
+    } finally {
+      this.memuatSiswa = false
     }
   },
   methods: {
-    patch(p) { if (this.admin) this.$store.commit('admin/patchDraft', p) },
+    patch(p) {
+      if (!this.admin) return
+      this.hasilTerbit = null
+      this.apiError = ''
+      this.$store.commit('admin/patchDraft', p)
+    },
     pilihJenis(i, j) { this.patch({ jenis: i, nominal: j.default }) },
     setNominal(e) { this.patch({ nominal: this.$parseRp(e.target.value) }) },
-    terpilih(k) { return this.draft.target === 2 || this.draft.kelasPilih.indexOf(k) >= 0 },
-    toggleKelas(k) { if (this.admin && this.draft.target !== 2) this.$store.commit('admin/toggleKelas', k) },
-    terbitkan() { if (this.admin && this.valid) this.$store.commit('admin/terbitkan') }
+    terpilih(k) {
+      if (this.draft.target === 2) return true
+      if (this.draft.target === 1) return this.draft.kelasPilih.some((kelas) => kelas[0] === k[0])
+      return this.draft.kelasPilih.indexOf(k) >= 0
+    },
+    toggleKelas(k) {
+      if (!this.admin || this.draft.target === 2) return
+      this.hasilTerbit = null
+      this.$store.commit('admin/toggleKelas', k)
+    },
+    async terbitkan() {
+      if (!this.admin || !this.valid || this.submitting) return
+      this.submitting = true
+      this.apiError = ''
+      try {
+        const jenis = this.jenisTagihan[this.draft.jenis]
+        const nama = `${jenis.label} ${jenis.periode.replace(/^Periode\\s+/i, '')}`
+        this.hasilTerbit = await api.buatTagihan({
+          nama,
+          nominal: Number(this.draft.nominal),
+          jatuh_tempo: this.tempoOpsi[this.draft.tempo].iso,
+          siswa_ids: this.penerima.map((s) => s.id),
+          kirim_notifikasi: Boolean(this.draft.kirimNotif)
+        })
+        this.$store.commit('admin/terbitkan')
+      } catch (error) {
+        this.apiError = error.message || 'Gagal menerbitkan tagihan.'
+      } finally {
+        this.submitting = false
+      }
+    }
   }
 }
 </script>
@@ -348,6 +451,9 @@ export default {
 .sukses { background: rgba(26,128,64,.08); border-radius: var(--r-sm); padding: 13px; display: flex; gap: 10px; align-items: flex-start; }
 .sukses svg { flex: none; margin-top: 1px; }
 .sukses p { margin: 0; font: 400 12px/1.5 var(--font-body); color: var(--green); text-wrap: pretty; }
+.pesan { font: 400 12px/1.5 var(--font-body); color: var(--muted); }
+.pesan--error { color: var(--coral); }
+.pesan--warning { color: var(--sand-ink); }
 .ringkas__aksi { display: flex; gap: 10px; }
 .btn-sm { border: none; border-radius: var(--r-sm); font: 700 13.5px var(--font-display); padding: 12px 18px; cursor: pointer; text-align: center; }
 .btn-sm--ghost { background: #fff; border: 1px solid var(--line); color: var(--muted); font: 600 13px var(--font-body); }

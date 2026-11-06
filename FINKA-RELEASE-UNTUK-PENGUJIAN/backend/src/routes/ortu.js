@@ -212,8 +212,8 @@ ortuRouter.get('/riwayat-pembayaran', wajibLogin, wajibRole('ortu'), async (req,
   res.json({ riwayat: mapped })
 })
 
-// Notifikasi status pembayaran orang tua. Data diturunkan dari request
-// pembayaran agar tidak ada status UI yang berbeda dari database.
+// Notifikasi status pembayaran dan pengingat tagihan hanya untuk orang tua
+// yang terhubung ke siswa terkait.
 ortuRouter.get('/notifikasi', wajibLogin, wajibRole('ortu'), async (req, res) => {
   const rows = await db.prepare(`
     SELECT t.*, s.nama AS siswa_nama, b.nama AS tagihan_nama
@@ -234,6 +234,16 @@ ortuRouter.get('/notifikasi', wajibLogin, wajibRole('ortu'), async (req, res) =>
     WHERE sp.ortu_id = ? AND l.tipe = 'bayar_tagihan'
     ORDER BY l.id DESC
     LIMIT 50
+  `).all(req.user.id)
+
+  const tagihanRows = await db.prepare(`
+    SELECT n.id, n.tipe, n.judul, n.pesan, n.siswa_id, n.tagihan_id, n.created_at,
+           t.status
+    FROM parent_notifications n
+    LEFT JOIN tagihan t ON t.id = n.tagihan_id
+    WHERE n.ortu_id = ?
+    ORDER BY n.id DESC
+    LIMIT 100
   `).all(req.user.id)
 
   const notifikasi = rows.map(r => {
@@ -263,6 +273,18 @@ ortuRouter.get('/notifikasi', wajibLogin, wajibRole('ortu'), async (req, res) =>
     status: 'disetujui',
     siswa_id: r.siswa_id,
     tagihan_id: r.ref_id
+  }))).concat(tagihanRows.map(r => ({
+    id: 'tagihan-' + r.id,
+    tipe: r.tipe,
+    judul: r.judul,
+    isi: r.pesan,
+    waktu: r.created_at,
+    baru: true,
+    status: r.status || 'dibatalkan',
+    prioritas: r.status === 'belum_bayar' ? 2 : 3,
+    siswa_id: r.siswa_id,
+    tagihan_id: r.tagihan_id
   })))
-  res.json({ notifikasi })
+  notifikasi.sort((a, b) => String(b.waktu).localeCompare(String(a.waktu)))
+  res.json({ notifikasi: notifikasi.slice(0, 100) })
 })

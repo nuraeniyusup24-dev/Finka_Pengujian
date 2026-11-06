@@ -116,6 +116,7 @@ adminReportsRouter.get('/tagihan-ringkasan', wajibLogin, hanyaAdmin, async (req,
 
 adminReportsRouter.post('/tagihan/bulk', wajibLogin, hanyaAdmin, async (req, res) => {
   const { nama, nominal, jatuh_tempo, siswa_ids } = req.body || {}
+  const kirimNotifikasi = req.body?.kirim_notifikasi === true
   const namaBersih = String(nama || '').trim()
   const nilai = Number(nominal)
   const tanggal = String(jatuh_tempo || '')
@@ -126,18 +127,45 @@ adminReportsRouter.post('/tagihan/bulk', wajibLogin, hanyaAdmin, async (req, res
   const ids = [...new Set(siswa_ids.map(Number).filter(positiveSafeInteger))]
   if (!ids.length) return res.status(400).json({ error: 'Pilih setidaknya satu siswa dengan ID valid' })
   const placeholders = ids.map(() => '?').join(',')
-  const valid = await db.prepare(`SELECT id FROM users WHERE role='siswa' AND id IN (${placeholders})`).all(...ids)
+  const valid = await db.prepare(`SELECT u.id, sp.ortu_id
+    FROM users u LEFT JOIN siswa_profil sp ON sp.user_id = u.id
+    WHERE u.role='siswa' AND u.id IN (${placeholders})`).all(...ids)
   if (valid.length !== ids.length) return res.status(400).json({ error: 'Ada siswa yang tidak ditemukan' })
   try {
     const tx = db.transaction(async () => {
       const stmt = await db.prepare('INSERT INTO tagihan (siswa_id,nama,nominal,jatuh_tempo) VALUES (?,?,?,?)')
+      const notice = kirimNotifikasi
+        ? await db.prepare(`INSERT INTO parent_notifications
+          (ortu_id, siswa_id, tagihan_id, tipe, judul, pesan)
+          VALUES (?, ?, ?, 'tagihan_diterbitkan', ?, ?)`)
+        : null
       let total = 0
-      for (const id of ids) { await stmt.run(id, namaBersih, nilai, tanggal); total += nilai }
-      return total
+      let notifikasi = 0
+      let tanpaOrtu = 0
+      for (const student of valid) {
+        const inserted = await stmt.run(student.id, namaBersih, nilai, tanggal)
+        total += nilai
+        if (kirimNotifikasi) {
+          if (student.ortu_id) {
+            const judul = 'Tagihan baru: ' + namaBersih
+            const pesan = `${namaBersih} sebesar ${nilai.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })} telah diterbitkan untuk siswa. Jatuh tempo ${tanggal}.`
+            await notice.run(student.ortu_id, student.id, inserted.lastInsertRowid, judul, pesan)
+            notifikasi += 1
+          } else {
+            tanpaOrtu += 1
+          }
+        } else if (!student.ortu_id) {
+          tanpaOrtu += 1
+        }
+      }
+      return { total, notifikasi, tanpaOrtu }
     })
-    const total = await tx()
-    await audit(req, 'TERBIT_TAGIHAN', `${ids.length} invoice · ${namaBersih} · Rp ${total.toLocaleString('id-ID')}`, 'tagihan', null)
-    res.status(201).json({ ok:true, jumlah:ids.length, total, nama:namaBersih, jatuh_tempo: tanggal })
+    const hasil = await tx()
+    await audit(req, 'TERBIT_TAGIHAN', `${ids.length} invoice · ${namaBersih} · Rp ${hasil.total.toLocaleString('id-ID')}`, 'tagihan', null)
+    res.status(201).json({
+      ok: true, jumlah: ids.length, total: hasil.total, nama: namaBersih,
+      jatuh_tempo: tanggal, notifikasi_terkirim: hasil.notifikasi, siswa_tanpa_ortu: hasil.tanpaOrtu
+    })
   } catch (e) {
     console.error('Terbit tagihan gagal:', e)
     res.status(500).json({ error: 'Gagal menerbitkan tagihan' })

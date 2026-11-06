@@ -115,6 +115,7 @@ export const api = {
   imporPic: (baris, simpan) => request('POST', '/admin/impor-pic', { baris, simpan }),
   tagihanRingkasan: (bulan) => request('GET', '/admin/tagihan-ringkasan' + (bulan ? '?bulan=' + encodeURIComponent(bulan) : '')),
   buatTagihan: (payload) => request('POST', '/admin/tagihan/bulk', payload),
+  kirimPengingatTagihan: () => request('POST', '/admin/tagihan/pengingat', {}),
   gantiPin: (pinLama, pinBaru) => request('POST', '/siswa/saya/ganti-pin', { pin_lama: pinLama, pin_baru: pinBaru }),
   riwayatKasir: () => request('GET', '/pos/riwayat-hari-ini'),
   batalTransaksi: (id, alasan) => request('POST', '/pos/transaksi/' + id + '/batal', { alasan }),

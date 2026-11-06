@@ -28,10 +28,10 @@ definePageMeta({
         <p class="notif__lengkap">{{ n.isi }}</p>
         <div class="notif__actions">
           <nuxt-link
-            v-if="n.tagihan_id && n.status === 'disetujui'"
+            v-if="n.tagihan_id"
             :to="'/ortu/tagihan/' + n.tagihan_id"
             class="notif__link"
-          >Lihat tagihan lunas</nuxt-link>
+          >{{ n.status === 'lunas' || n.status === 'disetujui' ? 'Lihat tagihan lunas' : 'Lihat tagihan' }}</nuxt-link>
           <nuxt-link
             v-else-if="n.id && !String(n.id).startsWith('ledger-')"
             :to="'/ortu/transaksi?jenis=pembayaran&id=' + n.id"
