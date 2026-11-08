@@ -33,6 +33,8 @@ npm ci
 
 Tidak ada langkah migrasi manual. Saat backend dijalankan, schema dibuat otomatis. Di luar production, database kosong akan diisi akun demo, profil siswa, tagihan, dan produk. Di production, demo tidak dibuat; siapkan akun admin awal melalui prosedur provisioning yang disetujui sebelum membuka layanan. Untuk mengulang database pengujian dari nol, hentikan backend lalu hapus folder `backend\data`.
 
+Setelah masuk sebagai Admin, buka **Pengaturan** untuk mengisi nama bank, nomor rekening resmi, dan nama pemilik rekening. Simpan pengaturan sebelum Orang Tua mengajukan pembayaran; tombol lanjut akan tetap dinonaktifkan sampai rekening tersedia. Data rekening disimpan di database SQLite dan ikut dalam proses backup database. Variabel `PAYMENT_BANK_NAME`, `PAYMENT_BANK_ACCOUNT`, dan `PAYMENT_ACCOUNT_HOLDER` di `.env` tetap dapat dipakai sebagai nilai awal/fallback jika belum ada rekening yang disimpan dari aplikasi.
+
 ## 3. Jalankan backend
 
 Masih di folder `backend`:

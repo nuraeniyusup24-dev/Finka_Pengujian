@@ -17,12 +17,26 @@ definePageMeta({
 
     <div class="card kolom">
       <div class="h display">Rekening tujuan top-up</div>
-      <div v-if="rekening" class="rek">
-        <div><span>Bank</span><b>{{ rekening.bank }}</b></div>
-        <div><span>Nomor rekening</span><b class="num">{{ rekening.nomor }}</b></div>
-        <div><span>Atas nama</span><b>{{ rekening.atas_nama }}</b></div>
-      </div>
-      <div v-else class="aturan__ket">{{ errorRekening || 'Memuat rekening…' }}</div>
+      <p class="aturan__ket">Atur rekening resmi yang akan ditampilkan kepada orang tua sebelum mereka mengajukan transfer.</p>
+      <form class="rekening-form" @submit.prevent="simpanRekening">
+        <label>
+          Nama bank
+          <input v-model.trim="formRekening.bank" maxlength="80" autocomplete="organization" required>
+        </label>
+        <label>
+          Nomor rekening
+          <input v-model.trim="formRekening.nomor" maxlength="40" inputmode="text" autocomplete="off" required>
+        </label>
+        <label>
+          Nama pemilik rekening
+          <input v-model.trim="formRekening.atas_nama" maxlength="100" autocomplete="name" required>
+        </label>
+        <p v-if="errorRekening" class="pesan pesan--error" role="alert">{{ errorRekening }}</p>
+        <p v-if="berhasilRekening" class="pesan pesan--berhasil" role="status">{{ berhasilRekening }}</p>
+        <button class="btn-sm" type="submit" :disabled="menyimpanRekening">
+          {{ menyimpanRekening ? 'Menyimpan…' : 'Simpan rekening' }}
+        </button>
+      </form>
 
       <div class="h display">Aturan kode unik</div>
       <div class="aturan">
@@ -65,6 +79,9 @@ export default {
   data() {
     return {
       errorRekening: '',
+      berhasilRekening: '',
+      menyimpanRekening: false,
+      formRekening: { bank: '', nomor: '', atas_nama: '' },
       aturan: [
         { label: 'Panjang kode unik', ket: 'Ditambahkan ke nominal dasar', nilai: '3 digit' },
         { label: 'Masa berlaku', ket: 'Lewat batas, kode kembali ke pool', nilai: '24 jam' },
@@ -83,11 +100,29 @@ export default {
   async mounted() {
     try {
       await this.$store.dispatch('muatInfoPembayaran')
+      Object.assign(this.formRekening, {
+        bank: this.rekening.bank,
+        nomor: this.rekening.nomor,
+        atas_nama: this.rekening.atas_nama
+      })
     } catch (error) {
       this.errorRekening = error.message || 'Informasi rekening tidak dapat dimuat.'
     }
   },
   methods: {
+    async simpanRekening() {
+      this.errorRekening = ''
+      this.berhasilRekening = ''
+      this.menyimpanRekening = true
+      try {
+        await this.$store.dispatch('simpanInfoPembayaran', this.formRekening)
+        this.berhasilRekening = 'Rekening pembayaran berhasil disimpan.'
+      } catch (error) {
+        this.errorRekening = error.message || 'Rekening pembayaran tidak dapat disimpan.'
+      } finally {
+        this.menyimpanRekening = false
+      }
+    },
     async logout() {
       await this.$store.dispatch('auth/logout')
       this.$router.replace('/login')
@@ -120,7 +155,15 @@ export default {
 .aturan__label { font: 600 12.5px var(--font-body); }
 .aturan__ket { font: 400 11.5px var(--font-body); color: var(--muted); margin-top: 2px; }
 .aturan__row b { font: 700 13px var(--font-display); color: var(--blue); }
-
+.rekening-form { display: flex; flex-direction: column; gap: 12px; }
+.rekening-form label { display: flex; flex-direction: column; gap: 6px; font: 600 12px var(--font-body); }
+.rekening-form input { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 12px; color: var(--ink); font: 400 13px var(--font-body); }
+.rekening-form input:focus { outline: 2px solid rgba(43, 82, 255, .18); border-color: var(--blue); }
+.rekening-form .btn-sm { align-self: flex-start; min-height: 40px; }
+.rekening-form .btn-sm:disabled { opacity: .65; cursor: wait; }
+.pesan { margin: 0; font: 500 12px var(--font-body); }
+.pesan--error { color: var(--coral); }
+.pesan--berhasil { color: #27854a; }
 
 @media (max-width: 760px) {
   .page { grid-template-columns: minmax(0, 1fr); }

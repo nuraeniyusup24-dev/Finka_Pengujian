@@ -187,6 +187,14 @@ export async function initDb() {
       email_verified_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS payment_settings (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      bank_name TEXT NOT NULL,
+      bank_account TEXT NOT NULL,
+      account_holder TEXT NOT NULL,
+      updated_at ${TS}
+    );
+
     CREATE TABLE IF NOT EXISTS siswa_kontrol (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       limit_aktif INTEGER NOT NULL DEFAULT 0 CHECK(limit_aktif IN (0,1)),

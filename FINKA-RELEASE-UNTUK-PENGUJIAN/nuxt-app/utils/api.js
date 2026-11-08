@@ -83,7 +83,9 @@ export const api = {
   }),
   kas: () => request('GET', '/pos/kas'),
   setKas: (kasAwal) => request('PUT', '/pos/kas', { kas_awal: kasAwal }),
+
   infoPembayaran: () => request('GET', '/config/pembayaran'),
+  simpanInfoPembayaran: (rekening) => request('PUT', '/config/pembayaran', rekening),
   kontrolAnak: (siswaId) => request('GET', '/ortu/anak/' + siswaId + '/kontrol'),
   simpanKontrol: (siswaId, payload) => request('PUT', '/ortu/anak/' + siswaId + '/kontrol', payload),
   metodeResetPin: (siswaId) => request('GET', '/ortu/anak/' + siswaId + '/pin-reset/options'),

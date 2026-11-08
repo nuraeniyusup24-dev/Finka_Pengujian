@@ -113,6 +113,12 @@ export const actions = {
     commit('setInfoPembayaran', info)
     return info
   },
+  async simpanInfoPembayaran({ commit }, rekening) {
+    const info = await api.simpanInfoPembayaran(rekening)
+    if (!info || !info.rekening) throw new Error('Informasi rekening pembayaran tidak berhasil disimpan.')
+    commit('setInfoPembayaran', info)
+    return info
+  },
   // Dipanggil saat admin memverifikasi pembayaran tagihan: tagihan jadi Lunas dan
   // invoice lunas terbit otomatis (nomor + tanggal), lalu orang tua diberi notifikasi.
   lunasiTagihan({ state, commit }, { id, waktu }) {

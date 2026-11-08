@@ -60,6 +60,11 @@ test('API menguji batas role serta pembayaran bersamaan dan pembatalan ledger', 
   const unconfiguredPayment = await api(baseUrl, adminToken, '/api/config/pembayaran')
   assert.equal(unconfiguredPayment.response.status, 200)
   assert.equal(unconfiguredPayment.body.rekening, null)
+  const unauthenticatedPaymentUpdate = await api(baseUrl, '', '/api/config/pembayaran', {
+    method: 'PUT',
+    body: JSON.stringify({ bank: 'Bank Uji', nomor: '0000001234', atas_nama: 'Akun Pengujian' })
+  })
+  assert.equal(unauthenticatedPaymentUpdate.response.status, 401)
   process.env.PAYMENT_BANK_NAME = 'Bank Uji'
   process.env.PAYMENT_BANK_ACCOUNT = '0000001234'
   process.env.PAYMENT_ACCOUNT_HOLDER = 'Akun Pengujian'
@@ -69,10 +74,36 @@ test('API menguji batas role serta pembayaran bersamaan dan pembatalan ledger', 
     nomor: '0000001234',
     atas_nama: 'Akun Pengujian'
   })
+  const savedPayment = await api(baseUrl, adminToken, '/api/config/pembayaran', {
+    method: 'PUT',
+    body: JSON.stringify({ bank: 'Bank Disimpan', nomor: '1234567890', atas_nama: 'Pemilik Rekening' })
+  })
+  assert.equal(savedPayment.response.status, 200, JSON.stringify(savedPayment.body))
+  assert.deepEqual(savedPayment.body.rekening, {
+    bank: 'Bank Disimpan',
+    nomor: '1234567890',
+    atas_nama: 'Pemilik Rekening'
+  })
+  const invalidPayment = await api(baseUrl, adminToken, '/api/config/pembayaran', {
+    method: 'PUT',
+    body: JSON.stringify({ bank: 'Bank Uji', nomor: '', atas_nama: 'Akun Pengujian' })
+  })
+  assert.equal(invalidPayment.response.status, 400)
   process.env.PAYMENT_BANK_NAME = ''
   process.env.PAYMENT_BANK_ACCOUNT = ''
   process.env.PAYMENT_ACCOUNT_HOLDER = ''
+  const persistedPayment = await api(baseUrl, adminToken, '/api/config/pembayaran')
+  assert.deepEqual(persistedPayment.body.rekening, {
+    bank: 'Bank Disimpan',
+    nomor: '1234567890',
+    atas_nama: 'Pemilik Rekening'
+  })
   const picToken = await login(baseUrl, 'pic.kantin.utama', 'pic123')
+  const forbiddenPaymentUpdate = await api(baseUrl, picToken, '/api/config/pembayaran', {
+    method: 'PUT',
+    body: JSON.stringify({ bank: 'Bank Uji', nomor: '0000001234', atas_nama: 'Akun Pengujian' })
+  })
+  assert.equal(forbiddenPaymentUpdate.response.status, 403)
   const studentToken = await login(baseUrl, 'aditya.p', 'siswa123')
   const usersResult = await api(baseUrl, picToken, '/api/admin/users')
   assert.equal(usersResult.response.status, 403)
