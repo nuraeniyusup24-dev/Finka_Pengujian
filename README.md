@@ -6,9 +6,9 @@ FINKA adalah aplikasi pengelolaan transaksi dan layanan keuangan siswa di lingku
 
 ## Fitur
 
-- **Siswa:** melihat profil, saldo, dan riwayat; melakukan transaksi dengan QR; mengatur PIN; dan memblokir kartu.
-- **Orang tua/wali:** melihat aktivitas anak, mengatur limit belanja, memblokir kartu, mengajukan isi saldo, membayar tagihan, serta mengelola PIN anak.
-- **PIC:** memindai QR siswa dan memproses transaksi kantin atau koperasi sesuai outlet.
+- **Siswa:** melihat profil, saldo, riwayat, serta struk digital transaksi/top-up yang sudah diverifikasi; melakukan transaksi dengan QR; mengatur PIN; dan memblokir kartu.
+- **Orang tua/wali:** melihat aktivitas anak, struk dan bukti transfer beserta status verifikasi, mengatur limit belanja, memblokir kartu, mengajukan isi saldo, membayar tagihan, serta mengelola PIN anak.
+- **PIC:** memindai QR siswa, memproses transaksi kantin atau koperasi sesuai outlet, dan membuka struk digital dari riwayat transaksi.
 - **Admin:** mengelola akun, siswa, tagihan, pembayaran, dan operasional aplikasi.
 - **Layanan pendukung:** invoice, laporan, bukti transfer, dan pemulihan akun dengan OTP. Pengiriman OTP memerlukan konfigurasi provider serta kontak terverifikasi.
 

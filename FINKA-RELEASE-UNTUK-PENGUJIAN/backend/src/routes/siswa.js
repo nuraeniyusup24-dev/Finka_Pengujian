@@ -100,7 +100,7 @@ siswaRouter.get('/:id/riwayat', wajibLogin, async (req, res) => {
   if (!(await bolehLihat(req.user, siswaId))) return res.status(403).json({ error: 'Tidak punya akses' })
 
   const rows = await db.prepare(
-    `SELECT l.id, l.tipe, l.nominal, l.keterangan, l.created_at, u.nama AS oleh_nama,
+    `SELECT l.id, l.tipe, l.nominal, l.keterangan, l.ref_tabel, l.ref_id, l.created_at, u.nama AS oleh_nama,
             SUM(l.nominal) OVER (ORDER BY l.id) AS sisa
      FROM ledger l
      LEFT JOIN users u ON u.id = l.dibuat_oleh

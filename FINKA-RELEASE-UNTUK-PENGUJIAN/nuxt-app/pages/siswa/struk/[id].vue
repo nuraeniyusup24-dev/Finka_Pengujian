@@ -17,7 +17,7 @@ definePageMeta({
         <div class="cek">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
         </div>
-        <div class="status">TRANSAKSI BERHASIL</div>
+        <div class="status">{{ row.tipe === 'topup' ? 'TOP-UP SUDAH DIVERIFIKASI' : 'TRANSAKSI BERHASIL' }}</div>
         <div class="judul display">{{ trx.judul }}</div>
         <div class="nominal display num">{{ Math.abs(trx.nominal) | rp }}</div>
         <div class="waktu">{{ trx.hari }} · {{ jam }} WIB</div>
@@ -36,15 +36,33 @@ definePageMeta({
         <div><span>ID transaksi</span><b class="num">{{ idTrx }}</b></div>
         <div><span>Metode</span><b>Pembayaran Finka</b></div>
       </div>
+      <section v-if="row.tipe === 'topup' && row.ref_tabel === 'topup_request'" class="bukti">
+        <div class="bukti__judul display">Bukti transfer</div>
+        <p v-if="proofError" class="bukti__error" role="alert">{{ proofError }}</p>
+        <button v-else-if="proof" type="button" class="bukti__open" @click="viewerTerbuka = true">
+          <img :src="proof" alt="Bukti transfer top-up" />
+          <span>Lihat bukti transfer</span>
+        </button>
+        <p v-else class="bukti__hint">Memuat bukti transfer…</p>
+      </section>
       <button class="cetak" @click="cetak">Cetak / simpan sebagai PDF</button>
     </div>
+    <ImageLightbox
+      v-if="viewerTerbuka && proof"
+      :src="proof"
+      alt="Bukti transfer top-up"
+      @close="viewerTerbuka = false"
+    />
   </div>
 </template>
 
 <script>
+import { api } from '~/utils/api'
+
 export default {
 
 
+  data() { return { proof: '', proofError: '', viewerTerbuka: false } },
   computed: {
     row() { return this.$store.state['profil-siswa'].riwayat.find((x) => Number(x.id) === Number(this.$route.params.id)) || null },
     trx() {
@@ -60,7 +78,17 @@ export default {
     cetak() { window.print() },
     muat() { return this.$store.dispatch('profil-siswa/muat') }
   },
-  async mounted() { await this.$store.dispatch('profil-siswa/muat') }
+  async mounted() {
+    await this.$store.dispatch('profil-siswa/muat')
+    if (this.row && this.row.tipe === 'topup' && this.row.ref_tabel === 'topup_request') {
+      try {
+        const result = await api.buktiTopup(this.row.ref_id)
+        this.proof = result.data_url
+      } catch (error) {
+        this.proofError = error.message || 'Bukti transfer tidak dapat dimuat.'
+      }
+    }
+  }
 }
 </script>
 
@@ -84,6 +112,12 @@ export default {
 .meta span { font: 400 12.5px var(--font-body); color: var(--muted); }
 .meta b { font: 600 12.5px var(--font-body); text-align:right; overflow-wrap:anywhere; }
 .meta--reference { background:var(--bg); border-radius:var(--r-sm); padding:12px; }
+.bukti { display:flex; flex-direction:column; gap:8px; }
+.bukti__judul { font-size:13px; }
+.bukti__open { display:flex; flex-direction:column; align-items:center; gap:7px; padding:10px; border:0; border-radius:var(--r-sm); background:var(--bg); color:var(--blue); cursor:zoom-in; font:500 11px var(--font-body); }
+.bukti__open img { max-width:100%; max-height:260px; object-fit:contain; }
+.bukti__hint,.bukti__error { margin:0; color:var(--muted); font:400 11px/1.5 var(--font-body); text-align:center; }
+.bukti__error { color:var(--coral); }
 .cetak { margin-top: auto; border: 1px solid var(--line); background: #fff; color:var(--blue); border-radius: var(--r-pill); padding: 13px; font: 700 13px var(--font-body); cursor: pointer; }
 .cetak:hover { background:var(--blue-soft); border-color:var(--blue); }
 @media print {

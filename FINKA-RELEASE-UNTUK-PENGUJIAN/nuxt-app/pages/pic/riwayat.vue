@@ -18,7 +18,7 @@ definePageMeta({
       <template v-else>
         <div v-for="h in hari" :key="h.tanggal" class="hari">
           <div class="hari__label">{{ h.tanggal }}</div>
-          <div v-for="t in h.items" :key="t.id" class="row">
+          <button v-for="t in h.items" :key="t.id" type="button" class="row" @click="bukaStruk(t)">
             <div class="ik">{{ inisial(t) }}</div>
             <div class="body">
               <div class="judul">{{ namaSiswa(t) }}</div>
@@ -28,10 +28,11 @@ definePageMeta({
               <div class="nominal num">− {{ $num(Math.abs(t.nominal)) }}</div>
               <div v-if="t.sisa !== null" class="sisa num">sisa {{ $num(t.sisa) }}</div>
             </div>
-          </div>
+          </button>
         </div>
       </template>
     </div>
+    <DigitalReceiptModal :receipt="struk" @close="struk = null" />
   </div>
 </template>
 
@@ -42,7 +43,7 @@ import { api } from '~/utils/api'
 export default {
 
 
-  data() { return { riwayat: [], memuat: true, error: '' } },
+  data() { return { riwayat: [], memuat: true, error: '', struk: null } },
   async mounted() { await this.muat() },
   computed: {
     outlet() { return this.$store.state.pos.outlet },
@@ -56,9 +57,12 @@ export default {
         return {
           id: row.id,
           hari: waktu.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }),
+          createdAt: row.created_at,
           nama: row.siswa_nama,
           kelas: row.kelas,
           meta: waktu.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace(':', '.') + ' · ' + row.keterangan,
+          keterangan: row.keterangan,
+          tipe: row.tipe,
           nominal: Number(row.nominal),
           sisa: null
         }
@@ -88,6 +92,22 @@ export default {
       }
     },
     namaSiswa(t) { return t.nama + (t.kelas ? ' · ' + t.kelas : '') },
+    bukaStruk(t) {
+      this.struk = {
+        title: t.tipe === 'tarik_tunai' ? 'Tarik tunai' : 'Pembelian',
+        amount: Math.abs(t.nominal),
+        date: t.createdAt,
+        status: 'Berhasil diproses',
+        tone: 'ok',
+        details: [
+          { label: 'Siswa', value: this.namaSiswa(t) },
+          { label: 'Outlet', value: this.namaOutlet },
+          { label: 'Keterangan', value: t.keterangan || 'Transaksi kasir' },
+          { label: 'ID transaksi', value: 'TRX-' + t.id },
+          { label: 'Status', value: 'Transaksi berhasil diproses oleh PIC' }
+        ]
+      }
+    },
     inisial(t) {
       return t.nama.trim().split(/\s+/).slice(0, 2).map((word) => word.charAt(0)).join('').toUpperCase() || '?'
     }
@@ -104,7 +124,9 @@ export default {
 .hari { display: flex; flex-direction: column; }
 .hari__label { font: 600 11.5px var(--font-body); color: var(--muted); letter-spacing: .04em; margin-bottom: 10px; }
 
-.row { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--bg); }
+.row { width:100%; box-sizing:border-box; display: flex; align-items: center; gap: 12px; padding: 11px 4px; border:0; border-bottom: 1px solid var(--bg); background:#fff; color:inherit; text-align:left; cursor:pointer; }
+.row:hover { background:#fafafb; }
+.row:focus-visible { outline:2px solid var(--blue); outline-offset:-2px; }
 .ik {
   width: 34px; height: 34px; border-radius: var(--r-pill); flex: none;
   background: var(--blue-soft); color: var(--blue);

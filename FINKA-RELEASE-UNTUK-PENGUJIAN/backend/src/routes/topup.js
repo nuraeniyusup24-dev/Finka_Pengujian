@@ -125,9 +125,11 @@ topupRouter.get('/:id', wajibLogin, async (req, res) => {
 })
 
 topupRouter.get('/:id/proof', wajibLogin, async (req, res) => {
-  const request = await db.prepare('SELECT ortu_id FROM topup_request WHERE id = ?').get(req.params.id)
+  const request = await db.prepare('SELECT ortu_id, siswa_id FROM topup_request WHERE id = ?').get(req.params.id)
   if (!request) return res.status(404).json({ error: 'Permintaan top-up tidak ditemukan' })
-  if (req.user.role !== 'admin' && Number(request.ortu_id) !== Number(req.user.id)) {
+  const pemilikOrtu = req.user.role === 'ortu' && Number(request.ortu_id) === Number(req.user.id)
+  const pemilikSiswa = req.user.role === 'siswa' && Number(request.siswa_id) === Number(req.user.id)
+  if (req.user.role !== 'admin' && !pemilikOrtu && !pemilikSiswa) {
     return res.status(403).json({ error: 'Tidak punya akses' })
   }
   const proof = await db.prepare('SELECT content_type, file_name, data_base64, file_size, uploaded_at FROM topup_proof WHERE topup_id = ?').get(req.params.id)
