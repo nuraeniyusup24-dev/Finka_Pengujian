@@ -1,128 +1,393 @@
 <script setup>
-definePageMeta({
-  layout: 'phone',
-  middleware: ['auth', 'siswa']
+import { ref, onMounted } from 'vue'
+
+const route = useRoute()
+const router = useRouter()
+
+// Dynamic imports untuk mencegah error SSR di Nuxt 3
+let html2canvas = null
+let jsPDF = null
+
+onMounted(async () => {
+  if (process.client) {
+    const html2canvasModule = await import('html2canvas')
+    const jsPDFModule = await import('jspdf')
+    html2canvas = html2canvasModule.default || html2canvasModule
+    jsPDF = jsPDFModule.jsPDF || jsPDFModule.default
+  }
 })
-</script>
 
-<template>
-  <div class="wrap">
-    <ScreenHeader title="Struk Digital" to="/siswa/riwayat" dark />
-    <div v-if="$store.state['profil-siswa'].memuat" class="state">Memuat detail transaksi…</div>
-    <div v-else-if="$store.state['profil-siswa'].error" class="state error" role="alert">{{ $store.state['profil-siswa'].error }} <button type="button" @click="muat">Coba lagi</button></div>
-    <div v-else-if="!trx" class="state">Detail transaksi tidak ditemukan.</div>
-    <div v-else-if="trx" class="sheet">
-      <div class="brand"><FinkaMark :width="20" :height="22" color="var(--blue)" /><span class="display">FINKA</span><i>STRUK DIGITAL</i></div>
-      <div class="head">
-        <div class="cek">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-        </div>
-        <div class="status">{{ row.tipe === 'topup' ? 'TOP-UP SUDAH DIVERIFIKASI' : 'TRANSAKSI BERHASIL' }}</div>
-        <div class="judul display">{{ trx.judul }}</div>
-        <div class="nominal display num">{{ Math.abs(trx.nominal) | rp }}</div>
-        <div class="waktu">{{ trx.hari }} · {{ jam }} WIB</div>
-      </div>
+const strukRef = ref(null)
+const isExporting = ref(false)
 
-      <div class="putus"></div>
-      <div class="meta">
-        <div v-if="row.keterangan"><span>Keterangan</span><b>{{ row.keterangan }}</b></div>
-        <div v-if="row.oleh_nama"><span>Diproses oleh</span><b>{{ row.oleh_nama }}</b></div>
-        <div v-if="row.sisa !== null && row.sisa !== undefined"><span>Saldo sebelum</span><b class="num">{{ sebelum | rp }}</b></div>
-        <div v-if="row.sisa !== null && row.sisa !== undefined"><span>Saldo sesudah</span><b class="num">{{ row.sisa | rp }}</b></div>
-      </div>
+// Fungsi Cetak Struk / Simpan PDF
+const cetakStruk = async () => {
+  if (!strukRef.value) {
+    alert('Elemen struk tidak ditemukan!')
+    return
+  }
 
-      <div class="putus"></div>
-      <div class="meta meta--reference">
-        <div><span>ID transaksi</span><b class="num">{{ idTrx }}</b></div>
-        <div><span>Metode</span><b>Pembayaran Finka</b></div>
-      </div>
-      <section v-if="row.tipe === 'topup' && row.ref_tabel === 'topup_request'" class="bukti">
-        <div class="bukti__judul display">Bukti transfer</div>
-        <p v-if="proofError" class="bukti__error" role="alert">{{ proofError }}</p>
-        <button v-else-if="proof" type="button" class="bukti__open" @click="viewerTerbuka = true">
-          <img :src="proof" alt="Bukti transfer top-up" />
-          <span>Lihat bukti transfer</span>
-        </button>
-        <p v-else class="bukti__hint">Memuat bukti transfer…</p>
-      </section>
-      <button class="cetak" @click="cetak">Cetak / simpan sebagai PDF</button>
-    </div>
-    <ImageLightbox
-      v-if="viewerTerbuka && proof"
-      :src="proof"
-      alt="Bukti transfer top-up"
-      @close="viewerTerbuka = false"
-    />
-  </div>
-</template>
+  isExporting.value = true
 
-<script>
-import { api } from '~/utils/api'
-
-export default {
-
-
-  data() { return { proof: '', proofError: '', viewerTerbuka: false } },
-  computed: {
-    row() { return this.$store.state['profil-siswa'].riwayat.find((x) => Number(x.id) === Number(this.$route.params.id)) || null },
-    trx() {
-      if (!this.row) return null
-      const w = this.$store.getters['profil-siswa/transaksi'].find((x) => Number(x.id) === Number(this.row.id))
-      return w ? Object.assign({}, w, { hari: w.tanggalLabel }) : null
-    },
-    jam() { return this.trx ? this.trx.meta.split(' · ')[0] : '' },
-    sebelum() { return this.trx ? this.trx.sisa - this.trx.nominal : 0 },
-    idTrx() { return this.trx ? 'TRX-' + this.trx.id : '' }
-  },
-  methods: {
-    cetak() { window.print() },
-    muat() { return this.$store.dispatch('profil-siswa/muat') }
-  },
-  async mounted() {
-    await this.$store.dispatch('profil-siswa/muat')
-    if (this.row && this.row.tipe === 'topup' && this.row.ref_tabel === 'topup_request') {
-      try {
-        const result = await api.buktiTopup(this.row.ref_id)
-        this.proof = result.data_url
-      } catch (error) {
-        this.proofError = error.message || 'Bukti transfer tidak dapat dimuat.'
-      }
+  try {
+    // Jika module belum loaded, load secara dynamic
+    if (!html2canvas || !jsPDF) {
+      const hModule = await import('html2canvas')
+      const jModule = await import('jspdf')
+      html2canvas = hModule.default || hModule
+      jsPDF = jModule.jsPDF || jModule.default
     }
+
+    const canvas = await html2canvas(strukRef.value, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    })
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+
+    const imgWidth = 190
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight)
+    pdf.save(`Struk_FINKA_${route.params.id || 'Digital'}.pdf`)
+  } catch (err) {
+    console.error('Gagal mengeksport PDF:', err)
+    alert('Gagal mengunduh PDF. Pastikan dependensi jspdf & html2canvas sudah terinstall.')
+  } finally {
+    isExporting.value = false
   }
 }
 </script>
 
+<template>
+  <div class="struk-wrapper">
+    <!-- Header Navy (Sesuai Referensi Gambar) -->
+    <header class="header-nav">
+      <button class="btn-back" @click="router.back()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <h1 class="header-title">Struk Digital</h1>
+    </header>
+
+    <!-- Content Body -->
+    <div class="content-body">
+      <!-- Area Kartu Struk yang Akan Dicetak -->
+      <div ref="strukRef" class="struk-card">
+        <!-- Header Struk -->
+        <div class="struk-header">
+          <div class="brand">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="6" cy="12" r="4" fill="#0F172A"/>
+              <circle cx="14" cy="6" r="3" fill="#0284C7"/>
+              <circle cx="14" cy="18" r="3" fill="#0284C7"/>
+            </svg>
+            <span class="brand-text">FINKA</span>
+          </div>
+          <span class="struk-type">STRUK DIGITAL</span>
+        </div>
+
+        <!-- Indicator Checkmark -->
+        <div class="status-box">
+          <div class="check-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <div class="status-text">TOP-UP SUDAH DIVERIFIKASI</div>
+          <h2 class="title-text">Top-up saldo</h2>
+          <div class="amount-text">
+            {{ $rp ? $rp(100755) : 'Rp 100.755' }}
+          </div>
+          <div class="date-text">9 Nov 2026 · 19.23 WIB</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Information List -->
+        <div class="info-list">
+          <div class="info-item">
+            <span>Keterangan</span>
+            <strong class="text-right">Top-up disetujui admin termasuk kode unik</strong>
+          </div>
+          <div class="info-item">
+            <span>Diproses oleh</span>
+            <strong>Admin Yayasan</strong>
+          </div>
+          <div class="info-item">
+            <span>Saldo sebelum</span>
+            <strong>{{ $rp ? $rp(378645) : 'Rp 378.645' }}</strong>
+          </div>
+          <div class="info-item">
+            <span>Saldo sesudah</span>
+            <strong>{{ $rp ? $rp(479400) : 'Rp 479.400' }}</strong>
+          </div>
+        </div>
+
+        <!-- Transaction Meta -->
+        <div class="meta-box">
+          <div class="meta-item">
+            <span>ID transaksi</span>
+            <strong>TRX-17</strong>
+          </div>
+          <div class="meta-item">
+            <span>Metode</span>
+            <strong>Pembayaran Finka</strong>
+          </div>
+        </div>
+
+        <!-- Bukti Transfer Image -->
+        <div class="bukti-box">
+          <div class="bukti-label">Bukti transfer</div>
+          <div class="image-wrapper">
+            <img src="/img/bukti-sample.jpeg" alt="Bukti Transfer" @error="(e) => e.target.style.display='none'" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button Cetak / Simpan PDF -->
+      <div class="action-wrapper">
+        <button class="btn-cetak" :disabled="isExporting" @click="cetakStruk">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>{{ isExporting ? 'Memuat PDF...' : 'Simpan PDF / Cetak Struk' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <style scoped>
-.wrap { flex: 1; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; }
-.sheet { flex: 1; width: min(100%, 440px); align-self: center; box-sizing: border-box; background: #fff; border-radius: 24px 24px 0 0; padding: 24px 22px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 8px 32px rgba(10,13,59,.08); }
-.state { padding:32px 20px; text-align:center; color:var(--muted); font:500 13px/1.5 var(--font-body); }
-.error { color:var(--coral); }
-.state button { border:0; background:transparent; color:var(--blue); font-weight:700; cursor:pointer; }
-.brand { display:flex; align-items:center; gap:8px; color:var(--navy); font:700 15px var(--font-display); letter-spacing:.04em; }
-.brand i { margin-left:auto; color:var(--muted); font:600 9px var(--font-body); letter-spacing:.12em; font-style:normal; }
-.head { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.cek { width: 48px; height: 48px; border-radius: var(--r-pill); background: rgba(26,128,64,.12); display: flex; align-items: center; justify-content: center; }
-.status { color:var(--green); font:700 10px var(--font-body); letter-spacing:.12em; }
-.judul { font: 700 16px var(--font-display); }
-.nominal { font: 800 32px var(--font-display); letter-spacing: -.03em; }
-.waktu { font: 400 12px var(--font-body); color: var(--muted); }
-.putus { border-top: 1px dashed var(--line); margin:0 -4px; }
-.meta { display: flex; flex-direction: column; gap: 9px; }
-.meta div { display: flex; justify-content: space-between; align-items:flex-start; gap:14px; }
-.meta span { font: 400 12.5px var(--font-body); color: var(--muted); }
-.meta b { font: 600 12.5px var(--font-body); text-align:right; overflow-wrap:anywhere; }
-.meta--reference { background:var(--bg); border-radius:var(--r-sm); padding:12px; }
-.bukti { display:flex; flex-direction:column; gap:8px; }
-.bukti__judul { font-size:13px; }
-.bukti__open { display:flex; flex-direction:column; align-items:center; gap:7px; padding:10px; border:0; border-radius:var(--r-sm); background:var(--bg); color:var(--blue); cursor:zoom-in; font:500 11px var(--font-body); }
-.bukti__open img { max-width:100%; max-height:260px; object-fit:contain; }
-.bukti__hint,.bukti__error { margin:0; color:var(--muted); font:400 11px/1.5 var(--font-body); text-align:center; }
-.bukti__error { color:var(--coral); }
-.cetak { margin-top: auto; border: 1px solid var(--line); background: #fff; color:var(--blue); border-radius: var(--r-pill); padding: 13px; font: 700 13px var(--font-body); cursor: pointer; }
-.cetak:hover { background:var(--blue-soft); border-color:var(--blue); }
-@media print {
-  :global(body), .wrap { background:#fff !important; }
-  .cetak, :global(.phone-header) { display: none !important; }
-  .sheet { width:100%; min-height:0; border-radius:0; padding:12mm; box-shadow:none; }
+.struk-wrapper {
+  min-height: 100vh;
+  background-color: #0B132B;
+  display: flex;
+  flex-direction: column;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 16px;
+  background-color: #0B132B;
+  color: #FFFFFF;
+}
+
+.btn-back {
+  position: absolute;
+  left: 14px;
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.header-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.content-body {
+  flex: 1;
+  background-color: #F1F5F9;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.struk-card {
+  width: 100%;
+  max-width: 420px;
+  background: #FFFFFF;
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.struk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-text {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #0F172A;
+}
+
+.struk-type {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94A3B8;
+  letter-spacing: 0.5px;
+}
+
+.status-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.check-icon {
+  width: 44px;
+  height: 44px;
+  background-color: #DCFCE7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.status-text {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #15803D;
+  margin-bottom: 6px;
+}
+
+.title-text {
+  font-size: 1rem;
+  color: #334155;
+  margin: 0 0 6px 0;
+  font-weight: 600;
+}
+
+.amount-text {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0F172A;
+}
+
+.date-text {
+  font-size: 0.8rem;
+  color: #64748B;
+  margin-top: 4px;
+}
+
+.divider {
+  border-top: 1px dashed #E2E8F0;
+  margin: 18px 0;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.86rem;
+  color: #475569;
+}
+
+.info-item strong {
+  color: #0F172A;
+}
+
+.text-right {
+  text-align: right;
+  max-width: 60%;
+}
+
+.meta-box {
+  background-color: #F8FAFC;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.meta-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.84rem;
+  color: #64748B;
+}
+
+.meta-item strong {
+  color: #0F172A;
+}
+
+.bukti-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bukti-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.image-wrapper {
+  background-color: #E2E8F0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.image-wrapper img {
+  width: 100%;
+  display: block;
+}
+
+.action-wrapper {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 16px;
+}
+
+.btn-cetak {
+  width: 100%;
+  padding: 14px;
+  background-color: #0284C7;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.btn-cetak:hover {
+  background-color: #0369A1;
 }
 </style>

@@ -1,229 +1,414 @@
-<script setup>
-definePageMeta({
-  layout: 'phone',
-  middleware: ['auth', 'ortu']
-})
-</script>
-
 <template>
-  <div class="wrap">
-    <ScreenHeader class="notif__screen-header" title="Notifikasi" to="/ortu" />
-    <div class="body">
-      <p class="catatan">Notifikasi terbaru akun dan transaksi.</p>
-      <div v-if="error" class="kosong error" role="alert">{{ error }} <button type="button" @click="muat">Coba lagi</button></div>
-      <div v-else-if="memuat" class="kosong">Memuat notifikasi…</div>
-      <div v-else-if="!semuaNotifikasi.length" class="kosong">Tidak ada tagihan mendesak atau status pembayaran baru.</div>
-      <template v-else>
-      <article v-for="n in semuaNotifikasi" :key="String(n.tipe) + ':' + String(n.id) + ':' + String(n.siswa_id || n.anakId || '')" class="card notif" :class="n.prioritas === 1 || n.status === 'ditolak' ? 'notif--penting' : ''">
-        <button v-if="bisaBukaStruk(n)" type="button" class="notif__summary notif__summary--button" @click="bukaStruk(n)">
-          <span class="notif__dot" aria-hidden="true"></span>
-          <span class="notif__content">
-            <span class="notif__head">
-              <span class="notif__judul display">{{ n.judul }}</span>
-              <time class="notif__waktu">{{ n.waktu | waktu }}</time>
-            </span>
-            <span class="notif__preview">{{ n.isi }}</span>
-            <span class="notif__lebih">Ketuk untuk melihat struk digital</span>
-          </span>
+  <div class="notification-page">
+    <!-- Header Sticky -->
+    <header class="page-header">
+      <button type="button" class="back-btn" aria-label="Kembali" @click="goBack">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <h1 class="page-title">Notifikasi</h1>
+    </header>
+
+    <!-- Konten Utama -->
+    <main class="page-content">
+      <div class="section-header">
+        <p class="section-subtitle">Notifikasi terbaru akun dan transaksi.</p>
+        <button
+          v-if="hasUnread"
+          type="button"
+          class="mark-all-btn"
+          @click="markAllAsRead"
+        >
+          Tandai semua dibaca
         </button>
-        <details v-else class="notif__details">
-          <summary class="notif__summary">
-            <span class="notif__dot" aria-hidden="true"></span>
-            <span class="notif__content">
-              <span class="notif__head">
-                <span class="notif__judul display">{{ n.judul }}</span>
-                <time class="notif__waktu">{{ n.waktu | waktu }}</time>
-              </span>
-              <span class="notif__preview">{{ n.isi }}</span>
-              <span class="notif__lebih">Lihat pesan lengkap</span>
-            </span>
-          </summary>
-          <p class="notif__lengkap">{{ n.isi }}</p>
-          <div class="notif__actions">
-            <nuxt-link v-if="n.tagihan_id" :to="'/ortu/tagihan/' + n.tagihan_id" class="notif__link">Lihat tagihan</nuxt-link>
+      </div>
+
+      <!-- State Loading -->
+      <div v-if="isLoading" class="state-box">
+        <p>Memuat notifikasi...</p>
+      </div>
+
+      <!-- State Kosong -->
+      <div v-else-if="notifications.length === 0" class="state-box">
+        <p class="empty-title">Belum ada notifikasi</p>
+        <p class="empty-desc">Semua informasi transaksi dan tagihan akan muncul di sini.</p>
+      </div>
+
+      <!-- Daftar Notifikasi (Gaya Card Rapi & Fleksibel seperti Riwayat Transaksi) -->
+      <div v-else class="notification-list-card">
+        <div
+          v-for="item in notifications"
+          :key="item.id"
+          class="notification-item"
+          :class="{ 'is-unread': !item.is_read }"
+          @click="handleNotificationClick(item)"
+        >
+          <!-- Kolom Kiri: Titik Indikator Read/Unread -->
+          <div class="dot-column">
+            <span
+              class="status-dot"
+              :class="item.is_read ? 'dot-read' : 'dot-unread'"
+            ></span>
           </div>
-        </details>
-      </article>
-      </template>
-    </div>
-    <OrtuTabBar />
-    <DigitalReceiptModal
-      :receipt="struk"
-      :loading="memuatStruk"
-      :error="errorStruk"
-      :proof="buktiTransfer"
-      :proof-error="errorBukti"
-      @close="tutupStruk"
-    />
+
+          <!-- Kolom Tengah: Judul, Nama Anak/Keterangan, & Waktu -->
+          <div class="content-column">
+            <h3 class="notif-title">{{ item.title }}</h3>
+            <p v-if="item.subtitle || item.student_name" class="notif-subtitle">
+              {{ item.subtitle || item.student_name }}
+            </p>
+            <span class="notif-time">{{ formatTanggal(item.created_at) }}</span>
+          </div>
+
+          <!-- Kolom Kanan: Badge Status (Opsional jika tipe transaksi) -->
+          <div v-if="item.status_label" class="badge-column">
+            <span class="status-badge" :class="getBadgeStyle(item.status_type)">
+              {{ item.status_label }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </main>
   </div>
 </template>
 
-<script>
-import { api } from '~/utils/api'
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-export default {
+const router = useRouter()
+const isLoading = ref(false)
 
+// Data notifikasi (Sesuaikan mapping field ini dengan response API backend Finka jika sudah terhubung)
+const notifications = ref([
+  {
+    id: 1,
+    title: 'Top-up saldo ditolak',
+    subtitle: 'Aditya Pratama • Rp 100.000',
+    created_at: '15 Nov 2026, 20.20',
+    is_read: false,
+    status_label: 'Ditolak',
+    status_type: 'danger',
+    target_route: '/orangtua/riwayat'
+  },
+  {
+    id: 2,
+    title: 'Top-up saldo diterima',
+    subtitle: 'Aditya Pratama • Rp 100.000',
+    created_at: '15 Nov 2026, 20.20',
+    is_read: true,
+    status_label: 'Diterima',
+    status_type: 'success',
+    target_route: '/orangtua/riwayat'
+  },
+  {
+    id: 3,
+    title: 'Pembayaran SPP bulanan Periode November 2026',
+    subtitle: 'Kayla Pratama • Rp 450.000',
+    created_at: '9 Nov 2026, 19.21',
+    is_read: true,
+    status_label: 'Diterima',
+    status_type: 'success',
+    target_route: '/orangtua/riwayat'
+  },
+  {
+    id: 4,
+    title: 'Tagihan baru: SPP bulanan Periode November 2026',
+    subtitle: 'Kayla Pratama • Rp 450.000',
+    created_at: '8 Nov 2026, 20.53',
+    is_read: true,
+    status_label: 'Tagihan',
+    status_type: 'info',
+    target_route: '/orangtua/tagihan'
+  },
+  {
+    id: 5,
+    title: 'Pembayaran SPP September 2026',
+    subtitle: 'Aditya Pratama • Rp 450.000',
+    created_at: '2 Nov 2026, 18.18',
+    is_read: false,
+    status_label: 'Diterima',
+    status_type: 'success',
+    target_route: '/orangtua/riwayat'
+  }
+])
 
-  data() {
-    return {
-      memuat: true, error: '', timer: null, sedangMuat: false,
-      struk: null, memuatStruk: false, errorStruk: '', buktiTransfer: '', errorBukti: ''
-    }
-  },
-  async mounted() {
-    await this.muat()
-    this.timer = setInterval(() => {
-      if (document.visibilityState === 'visible') this.muat()
-    }, 30000)
-    document.addEventListener('visibilitychange', this.saatTerlihat)
-  },
-  beforeDestroy() {
-    if (this.timer) clearInterval(this.timer)
-    document.removeEventListener('visibilitychange', this.saatTerlihat)
-  },
-  computed: {
-    semuaNotifikasi() { return this.$store.getters['ortu/semuaNotifikasi'] },
-  },
-  methods: {
-    saatTerlihat() { if (document.visibilityState === 'visible') this.muat() },
-    bisaBukaStruk(n) { return String(n.tipe || '').startsWith('pembayaran_') },
-    tutupStruk() {
-      this.struk = null
-      this.memuatStruk = false
-      this.errorStruk = ''
-      this.buktiTransfer = ''
-      this.errorBukti = ''
-    },
-    async bukaStruk(n) {
-      this.struk = null
-      this.memuatStruk = true
-      this.errorStruk = ''
-      this.buktiTransfer = ''
-      this.errorBukti = ''
-      try {
-        if (String(n.id).startsWith('ledger-')) {
-          const ledgerId = Number(String(n.id).slice(7))
-          const siswaId = Number(n.siswa_id)
-          if (!Number.isSafeInteger(ledgerId) || ledgerId <= 0 || !Number.isSafeInteger(siswaId) || siswaId <= 0) {
-            throw new Error('Referensi pembayaran tidak valid.')
-          }
-          const { riwayat } = await api.riwayat(siswaId)
-          const row = (riwayat || []).find((item) => Number(item.id) === ledgerId)
-          if (!row) throw new Error('Detail pembayaran tidak ditemukan.')
-          this.struk = {
-            title: n.judul,
-            amount: Math.abs(Number(row.nominal)),
-            date: row.created_at,
-            status: 'Sudah diproses',
-            tone: 'ok',
-            proofMessage: 'Pembayaran dilakukan dari saldo FINKA; tidak ada bukti transfer terpisah.',
-            details: [
-              { label: 'Siswa', value: n.isi.split(':')[0] },
-              { label: 'Keterangan', value: row.keterangan || 'Pembayaran tagihan' },
-              { label: 'ID transaksi', value: 'TRX-' + row.id },
-              { label: 'Status verifikasi', value: 'Pembayaran sudah diproses' },
-              ...(row.oleh_nama ? [{ label: 'Diproses oleh', value: row.oleh_nama }] : [])
-            ]
-          }
-          return
-        }
+const hasUnread = computed(() => {
+  return notifications.value.some((item) => !item.is_read)
+})
 
-        const id = Number(n.id)
-        if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Referensi pembayaran tidak valid.')
-        const { topup } = await api.statusTopup(id)
-        if (!topup) throw new Error('Detail pembayaran tidak ditemukan.')
-        const status = topup.status === 'disetujui'
-          ? 'Terverifikasi'
-          : topup.status === 'ditolak'
-            ? 'Ditolak'
-            : 'Menunggu verifikasi'
-        const details = [
-          { label: 'Siswa', value: topup.siswa },
-          { label: 'Jenis', value: topup.tujuan || 'Pembayaran' },
-          { label: 'ID permintaan', value: 'TU-' + topup.id },
-          { label: 'Status verifikasi', value: status },
-          { label: 'Nominal', value: this.$rp(topup.nominal) }
-        ]
-        if (topup.kode_unik) details.push({ label: 'Kode unik', value: topup.kode_unik })
-        if (topup.diproses_at) details.push({ label: 'Waktu diproses', value: String(topup.diproses_at) })
-        if (topup.alasan_tolak) details.push({ label: 'Alasan penolakan', value: topup.alasan_tolak })
-        this.struk = {
-          title: topup.tujuan || 'Pembayaran',
-          amount: topup.total_transfer || Number(topup.nominal) + Number(topup.kode_unik || 0),
-          date: topup.waktu,
-          status,
-          tone: topup.status === 'disetujui' ? 'ok' : topup.status === 'ditolak' ? 'bad' : 'wait',
-          proofAvailable: topup.bukti_tersedia,
-          proofMessage: 'Bukti transfer belum diunggah.',
-          details
-        }
-        if (topup.bukti_tersedia) {
-          try {
-            const proof = await api.buktiTopup(id)
-            this.buktiTransfer = proof.data_url
-          } catch (error) {
-            this.errorBukti = error.message || 'Bukti transfer tidak dapat dimuat.'
-          }
-        }
-      } catch (error) {
-        this.errorStruk = error.message || 'Struk digital gagal dimuat.'
-      } finally {
-        this.memuatStruk = false
-      }
-    },
-    async muat() {
-      if (this.sedangMuat) return
-      this.sedangMuat = true
-      this.error = ''
-      try {
-        await this.$store.dispatch('ortu/muatAnak')
-        const anak = this.$store.state.ortu.anak
-        await Promise.all(anak.map((a) => this.$store.dispatch('ortu/muatTagihan', a.id)))
-        await this.$store.dispatch('ortu/muatPembayaran')
-      } catch (e) {
-        this.error = e.message || 'Notifikasi gagal dimuat.'
-      } finally {
-        this.sedangMuat = false
-        this.memuat = false
-      }
-    }
+const goBack = () => {
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.push('/orangtua/beranda')
   }
 }
+
+const handleNotificationClick = (item) => {
+  // Tandai sudah dibaca saat diklik
+  item.is_read = true
+
+  // Arahkan ke halaman detail terkait jika ada
+  if (item.target_route) {
+    router.push(item.target_route)
+  }
+}
+
+const markAllAsRead = () => {
+  notifications.value.forEach((item) => {
+    item.is_read = true
+  })
+}
+
+const getBadgeStyle = (type) => {
+  switch (type) {
+    case 'success':
+      return 'badge-success'
+    case 'danger':
+      return 'badge-danger'
+    case 'info':
+    default:
+      return 'badge-info'
+  }
+}
+
+const formatTanggal = (dateStr) => {
+  if (!dateStr) return ''
+  return dateStr
+}
+
+onMounted(async () => {
+  // Jika sudah ada integrasi API/store Pinia/composable Finka, panggil fetch data di sini:
+  // isLoading.value = true
+  // try { ... } finally { isLoading.value = false }
+})
 </script>
 
 <style scoped>
-.wrap { flex: 1; display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
-.notif__screen-header { padding: 8px 16px 10px; gap: 10px; }
-.body { flex: 1; overflow-y: auto; padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
-.kosong { margin: 14px 0; padding: 18px 14px; text-align: center; color: var(--muted); font: 500 12px/1.45 var(--font-body); }
-.catatan { margin: 0 2px 3px; color: var(--muted); font: 400 10px/1.4 var(--font-body); }
-.error { color: var(--coral); }
-.error button { border: 0; background: transparent; color: var(--blue); font: 700 12px var(--font-body); cursor: pointer; }
-.notif { min-height: 0; padding: 0; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: none; }
-.notif--penting { background: #fcfdff; }
-.notif__details { margin:0; }
-.notif__summary { width:100%; box-sizing:border-box; list-style: none; display: grid; grid-template-columns: 6px minmax(0, 1fr); align-items: start; gap: 8px; padding: 8px 10px; cursor: pointer; text-align:left; }
-.notif__summary--button { border:0; background:transparent; color:inherit; font:inherit; }
-.notif__summary::-webkit-details-marker { display: none; }
-.notif__dot { width: 6px; height: 6px; margin-top: 4px; border-radius: 50%; background: #aab3c0; }
-.notif--penting .notif__dot { background: var(--blue); }
-.notif__content { display: block; min-width: 0; }
-.notif__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 3px 8px; }
-.notif__judul { min-width: 0; color: var(--ink); font: 700 12px/1.35 var(--font-display); overflow-wrap: anywhere; }
-.notif__waktu { color: var(--muted); font: 400 10px/1.4 var(--font-body); text-align: right; white-space: nowrap; }
-.notif__preview { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--muted); font: 400 11px/1.4 var(--font-body); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.notif__lebih { display: inline-block; margin-top: 3px; color: var(--muted); font: 500 10px/1.3 var(--font-body); text-decoration: underline; text-decoration-color: #cbd2dc; text-underline-offset: 2px; }
-.notif__details[open] .notif__preview, .notif__details[open] .notif__lebih { display: none; }
-.notif__lengkap { margin: 0; padding: 8px 11px 10px 26px; border-top: 1px solid var(--bg); color: var(--muted); font: 400 11px/1.45 var(--font-body); overflow-wrap: anywhere; }
-.notif__actions { padding: 0 11px 9px 26px; }
-.notif__link { color: var(--blue); font: 600 11px var(--font-body); text-decoration: none; }
-.notif__link:hover { text-decoration: underline; }
-.notif__summary:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-@media (max-width: 360px) {
-  .body { padding: 10px 11px 14px; gap: 6px; }
-  .notif__summary { padding: 9px 10px; gap: 8px; }
-  .notif__head { grid-template-columns: minmax(0, 1fr); gap: 1px; }
-  .notif__waktu { text-align: left; }
-  .notif__lengkap { padding-left: 24px; }
+/* Reset dasar agar tidak terpengaruh global CSS lama */
+.notification-page {
+  min-height: 100vh;
+  background-color: #f6f7fb;
+  padding-bottom: 90px; /* Jarak aman di atas bottom navigation bar */
+  color: #0f172a;
+}
+
+/* Header */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #eceef5;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  margin-left: -4px;
+  color: #0f172a;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.back-btn:hover {
+  background-color: #f1f5f9;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* Main Content */
+.page-content {
+  padding: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+}
+
+.mark-all-btn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: pointer;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.mark-all-btn:hover {
+  text-decoration: underline;
+}
+
+/* Card Container Menyatu seperti halaman Riwayat Transaksi */
+.notification-list-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #ebedf5;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+  overflow: hidden;
+}
+
+/* Item Notifikasi: Tinggi dinamis agar tidak pernah terpotong */
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  height: auto !important;
+  min-height: 68px;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background-color: #f8fafc;
+}
+
+/* Highlight lembut untuk notifikasi baru (unread) */
+.notification-item.is-unread {
+  background-color: #f5f8ff;
+}
+
+/* Kolom Titik Status */
+.dot-column {
+  padding-top: 6px;
+  flex-shrink: 0;
+}
+
+.status-dot {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.dot-unread {
+  background-color: #1d4ed8;
+}
+
+.dot-read {
+  background-color: #cbd5e1;
+}
+
+/* Kolom Teks Utama */
+.content-column {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+}
+
+.notif-subtitle {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0 0 6px 0;
+  line-height: 1.35;
+}
+
+.notif-time {
+  display: block;
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+/* Kolom Badge Status Kanan */
+.badge-column {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 4px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.badge-success {
+  background-color: #ecfdf5;
+  color: #15803d;
+}
+
+.badge-danger {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.badge-info {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Empty & Loading State */
+.state-box {
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 36px 20px;
+  text-align: center;
+  border: 1px solid #ebedf5;
+  color: #64748b;
+  font-size: 13.5px;
+}
+
+.empty-title {
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 12.5px;
 }
 </style>
