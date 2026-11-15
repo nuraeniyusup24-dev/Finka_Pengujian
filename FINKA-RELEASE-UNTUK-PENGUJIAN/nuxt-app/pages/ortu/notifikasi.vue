@@ -53,6 +53,9 @@
       </div>
     </div>
 
+    <!-- Bottom navigation bar, sama seperti halaman Beranda -->
+    <OrtuTabBar />
+
     <!-- POP-UP STRUK DIGITAL -->
     <Teleport to="body">
       <div
@@ -111,13 +114,13 @@
               <span>Nominal</span>
               <b>{{ formatRupiah(selectedReceipt.base_amount) }}</b>
             </div>
-            <div v-if="selectedReceipt.unique_code !== null" class="row">
+            <div v-if="selectedReceipt.unique_code != null" class="row">
               <span>Kode unik</span>
               <b>{{ selectedReceipt.unique_code }}</b>
             </div>
             <div class="row">
               <span>Waktu diproses</span>
-              <b>{{ selectedReceipt.processed_at }}</b>
+              <b>{{ formatWaktu(selectedReceipt.processed_at) }}</b>
             </div>
             <div v-if="selectedReceipt.rejection_reason" class="row">
               <span>Alasan penolakan</span>
@@ -147,6 +150,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+
+// Layout ponsel + proteksi login/peran, sama seperti halaman ortu lain (Beranda, Riwayat, Kontrol)
+definePageMeta({
+  layout: 'phone',
+  middleware: ['auth', 'ortu']
+})
 
 const router = useRouter()
 const selectedReceipt = ref(null)
@@ -260,6 +269,16 @@ const formatRupiah = (val) => {
   return 'Rp ' + Number(val).toLocaleString('id-ID')
 }
 
+// Waktu ISO (UTC) -> format lokal WIB, mis. "15 Nov 2026, 20.20"
+const formatWaktu = (val) => {
+  if (!val) return '-'
+  const d = new Date(val)
+  if (Number.isNaN(d.getTime())) return String(val)
+  const tgl = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' })
+  const jam = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
+  return tgl + ', ' + jam
+}
+
 const getBadgeClass = (status) => {
   const s = (status || '').toLowerCase()
   if (s === 'diterima' || s === 'lunas') return 'badge--green'
@@ -272,8 +291,6 @@ const getBadgeClass = (status) => {
 /* Kunci kontainer utama agar tidak ikut scroll */
 .wrap {
   flex: 1;
-  height: 100%;
-  max-height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg);
