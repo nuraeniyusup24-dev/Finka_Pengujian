@@ -138,7 +138,8 @@ export default {
     namaOrtu() { return (this.$store.state.auth.user && this.$store.state.auth.user.nama) || 'Orang Tua' },
     terakhir() { return this.aktivitas.slice(0, 3) },
     belumBayar() { return this.$store.getters['ortu/belumBayarSemua'] },
-    jumlahNotifikasi() { return this.$store.getters['ortu/jumlahNotifikasi'] },
+    // Lencana lonceng = notifikasi yang belum dibaca (status baca dibagi dengan halaman Notifikasi)
+    jumlahNotifikasi() { return this.$store.getters['ortu/jumlahBelumDibaca'] },
     riwayatPembayaran() { return this.$store.state.ortu.riwayatPembayaran || [] }
   },
   async mounted() { await this.muat() },

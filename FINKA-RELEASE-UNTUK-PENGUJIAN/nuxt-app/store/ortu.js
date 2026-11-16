@@ -9,6 +9,35 @@ function inisialDari(nama) {
   return (nama || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 }
 
+// Kunci unik satu notifikasi. Dipakai untuk menandai "sudah dibaca" di lencana lonceng
+// dan di halaman Notifikasi. Perubahan status (mis. menunggu -> diterima) menghasilkan
+// tipe baru sehingga notifikasinya muncul lagi sebagai belum dibaca.
+export function kunciNotifikasi(n) {
+  const ref = n.id != null ? n.id : (n.tagihanId != null ? n.tagihanId : '')
+  const siswa = n.siswa_id != null ? n.siswa_id : (n.anakId != null ? n.anakId : '')
+  return [n.tipe || '', ref, siswa].join(':')
+}
+
+// Status baca disimpan per akun di browser agar tetap ada setelah halaman dimuat ulang.
+const KUNCI_DIBACA = 'finka_notif_dibaca_v1_'
+const MAKS_DIBACA = 500
+
+function bacaDibaca(pemilikId) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return []
+    const raw = window.localStorage.getItem(KUNCI_DIBACA + pemilikId)
+    const list = raw ? JSON.parse(raw) : []
+    return Array.isArray(list) ? list.map(String) : []
+  } catch (e) { return [] }
+}
+
+function simpanDibaca(pemilikId, list) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    window.localStorage.setItem(KUNCI_DIBACA + pemilikId, JSON.stringify(list.slice(-MAKS_DIBACA)))
+  } catch (e) { /* penyimpanan penuh/diblokir: status baca hanya berlaku selama sesi */ }
+}
+
 export const state = () => ({
   anak: [], // [{ id, nama, kelas, nis, saldo }]
   anakAktifId: null,
@@ -16,7 +45,9 @@ export const state = () => ({
   riwayat: {}, // siswaId -> [ledger...]
   memuatAnak: false,
   riwayatPembayaran: [],
-  notifikasiStatus: []
+  notifikasiStatus: [],
+  dibaca: [], // kunci notifikasi yang sudah dibaca
+  dibacaPemilikId: null // id akun pemilik daftar 'dibaca' di atas
 })
 
 export const getters = {
@@ -78,6 +109,9 @@ export const getters = {
   },
   jumlahNotifikasi: (s, g) => g.notifikasi.length + s.notifikasiStatus.length,
   semuaNotifikasi: (s, g) => s.notifikasiStatus.concat(g.notifikasi),
+  // Angka pada lencana lonceng: hanya notifikasi yang belum dibaca
+  jumlahBelumDibaca: (s, g) => g.semuaNotifikasi.filter((n) => !s.dibaca.includes(kunciNotifikasi(n))).length,
+  sudahDibaca: (s) => (n) => s.dibaca.includes(kunciNotifikasi(n)),
   riwayatAktif: (s, g) => (g.aktif ? s.riwayat[g.aktif.id] || [] : [])
 }
 
@@ -100,16 +134,37 @@ export const mutations = {
   setMemuatAnak(s, v) { s.memuatAnak = v },
   setRiwayatPembayaran(s, list) { s.riwayatPembayaran = list },
   setNotifikasiStatus(s, list) { s.notifikasiStatus = list },
+  setDibaca(s, { pemilikId, list }) { s.dibacaPemilikId = pemilikId; s.dibaca = list },
+  tambahDibaca(s, keys) { s.dibaca = s.dibaca.concat(keys) },
   reset(s) {
     s.anak = []; s.anakAktifId = null; s.tagihan = {}; s.riwayat = {}
     s.memuatAnak = false; s.riwayatPembayaran = []; s.notifikasiStatus = []
+    s.dibaca = []; s.dibacaPemilikId = null
   }
 }
 
 export const actions = {
-  async muatAnak({ commit, rootState }) {
+  // Muat daftar notifikasi yang sudah dibaca milik akun yang sedang login (sekali per akun)
+  muatDibaca({ commit, state, rootState }) {
+    const user = rootState.auth.user
+    if (!user || user.role !== 'ortu') return
+    if (state.dibacaPemilikId === user.id) return
+    commit('setDibaca', { pemilikId: user.id, list: bacaDibaca(user.id) })
+  },
+  // Tandai satu atau beberapa notifikasi (objek notifikasi) sebagai sudah dibaca
+  async tandaiDibaca({ commit, dispatch, state, rootState }, daftar) {
+    const user = rootState.auth.user
+    if (!user || user.role !== 'ortu') return
+    await dispatch('muatDibaca')
+    const keys = (daftar || []).map(kunciNotifikasi).filter((k, i, arr) => !state.dibaca.includes(k) && arr.indexOf(k) === i)
+    if (!keys.length) return
+    commit('tambahDibaca', keys)
+    simpanDibaca(user.id, state.dibaca)
+  },
+  async muatAnak({ commit, dispatch, rootState }) {
     const pemilikId = rootState.auth.user && rootState.auth.user.id
     if (!rootState.auth.user || rootState.auth.user.role !== 'ortu') return []
+    await dispatch('muatDibaca')
     commit('setMemuatAnak', true)
     try {
       const { anak } = await api.anakAnak()
@@ -135,9 +190,10 @@ export const actions = {
     commit('setRiwayat', { siswaId, list: riwayat })
     return riwayat
   },
-  async muatPembayaran({ commit, rootState }) {
+  async muatPembayaran({ commit, dispatch, rootState }) {
     const pemilikId = rootState.auth.user && rootState.auth.user.id
     if (!rootState.auth.user || rootState.auth.user.role !== 'ortu') return null
+    await dispatch('muatDibaca')
     const { riwayat } = await api.riwayatPembayaran()
     if (!rootState.auth.user || rootState.auth.user.role !== 'ortu' || Number(rootState.auth.user.id) !== Number(pemilikId)) return null
     commit('setRiwayatPembayaran', riwayat || [])

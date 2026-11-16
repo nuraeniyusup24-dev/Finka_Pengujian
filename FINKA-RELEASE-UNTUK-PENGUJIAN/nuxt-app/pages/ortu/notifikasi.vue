@@ -17,7 +17,7 @@
           v-if="hasUnread"
           type="button"
           class="link"
-          @click="markAllAsRead"
+          @click="tandaiSemua"
         >
           Tandai dibaca
         </button>
@@ -26,28 +26,36 @@
 
     <!-- Hanya Area Card Notifikasi Ini yang Bisa Di-Scroll -->
     <div class="body scroll-area">
-      <div class="list">
+      <div v-if="error" class="kosong kosong--error" role="alert">
+        {{ error }} <button type="button" class="link" @click="muat">Coba lagi</button>
+      </div>
+      <div v-else-if="memuat && !notifications.length" class="kosong">Memuat notifikasi…</div>
+      <div v-else-if="!notifications.length" class="kosong">
+        Belum ada notifikasi. Informasi tagihan dan status pembayaran akan muncul di sini.
+      </div>
+      <div v-else class="list">
         <div
           v-for="item in notifications"
-          :key="item.id"
+          :key="item.key"
           class="card notif-item"
-          @click="openReceipt(item)"
+          role="button"
+          tabindex="0"
+          @click="bukaItem(item)"
+          @keydown.enter="bukaItem(item)"
         >
           <span
             class="dot"
-            :class="item.is_read ? 'dot--read' : 'dot--unread'"
+            :class="item.dibaca ? 'dot--read' : 'dot--unread'"
           ></span>
 
           <div class="notif-item__info">
-            <div class="notif-item__judul">{{ item.title }}</div>
-            <div class="notif-item__sub">
-              {{ item.student_name }} • {{ formatRupiah(item.total_amount) }}
-            </div>
-            <div class="notif-item__waktu">{{ item.created_at }}</div>
+            <div class="notif-item__judul">{{ item.judul }}</div>
+            <div class="notif-item__sub">{{ item.isi }}</div>
+            <div class="notif-item__waktu">{{ item.waktu }}</div>
           </div>
 
-          <span class="badge" :class="getBadgeClass(item.status)">
-            {{ item.status }}
+          <span v-if="item.badge" class="badge" :class="item.badgeClass">
+            {{ item.badge }}
           </span>
         </div>
       </div>
@@ -59,9 +67,9 @@
     <!-- POP-UP STRUK DIGITAL -->
     <Teleport to="body">
       <div
-        v-if="selectedReceipt"
+        v-if="selectedReceipt || memuatStruk || errorStruk"
         class="overlay"
-        @click.self="closeReceipt"
+        @click.self="tutupStruk"
       >
         <div class="modal">
           <div class="modal__head">
@@ -73,7 +81,7 @@
               type="button"
               class="modal__close"
               aria-label="Tutup"
-              @click="closeReceipt"
+              @click="tutupStruk"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -82,62 +90,67 @@
             </button>
           </div>
 
-          <div class="modal__hero">
-            <span class="badge" :class="getBadgeClass(selectedReceipt.status)">
-              {{ selectedReceipt.status }}
-            </span>
-            <div class="modal__cat">{{ selectedReceipt.category }}</div>
-            <div class="modal__total">{{ formatRupiah(selectedReceipt.total_amount) }}</div>
-            <div class="modal__date">{{ selectedReceipt.created_at }}</div>
-          </div>
+          <div v-if="memuatStruk" class="modal__state">Memuat struk digital…</div>
+          <div v-else-if="errorStruk" class="modal__state modal__state--error" role="alert">{{ errorStruk }}</div>
 
-          <div class="separator"></div>
+          <template v-else-if="selectedReceipt">
+            <div class="modal__hero">
+              <span class="badge" :class="getBadgeClass(selectedReceipt.status)">
+                {{ selectedReceipt.status }}
+              </span>
+              <div class="modal__cat">{{ selectedReceipt.category }}</div>
+              <div class="modal__total">{{ formatRupiah(selectedReceipt.total_amount) }}</div>
+              <div class="modal__date">{{ selectedReceipt.created_at }}</div>
+            </div>
 
-          <div class="modal__rows">
-            <div class="row">
-              <span>Siswa</span>
-              <b>{{ selectedReceipt.student_name }}</b>
-            </div>
-            <div class="row">
-              <span>Jenis</span>
-              <b>{{ selectedReceipt.category }}</b>
-            </div>
-            <div class="row">
-              <span>ID permintaan</span>
-              <b>{{ selectedReceipt.request_id }}</b>
-            </div>
-            <div class="row">
-              <span>Status verifikasi</span>
-              <b>{{ selectedReceipt.status }}</b>
-            </div>
-            <div class="row">
-              <span>Nominal</span>
-              <b>{{ formatRupiah(selectedReceipt.base_amount) }}</b>
-            </div>
-            <div v-if="selectedReceipt.unique_code != null" class="row">
-              <span>Kode unik</span>
-              <b>{{ selectedReceipt.unique_code }}</b>
-            </div>
-            <div class="row">
-              <span>Waktu diproses</span>
-              <b>{{ formatWaktu(selectedReceipt.processed_at) }}</b>
-            </div>
-            <div v-if="selectedReceipt.rejection_reason" class="row">
-              <span>Alasan penolakan</span>
-              <b>{{ selectedReceipt.rejection_reason }}</b>
-            </div>
-          </div>
+            <div class="separator"></div>
 
-          <div class="separator"></div>
+            <div class="modal__rows">
+              <div class="row">
+                <span>Siswa</span>
+                <b>{{ selectedReceipt.student_name }}</b>
+              </div>
+              <div class="row">
+                <span>Jenis</span>
+                <b>{{ selectedReceipt.category }}</b>
+              </div>
+              <div class="row">
+                <span>ID permintaan</span>
+                <b>{{ selectedReceipt.request_id }}</b>
+              </div>
+              <div class="row">
+                <span>Status verifikasi</span>
+                <b>{{ selectedReceipt.status }}</b>
+              </div>
+              <div class="row">
+                <span>Nominal</span>
+                <b>{{ formatRupiah(selectedReceipt.base_amount) }}</b>
+              </div>
+              <div v-if="selectedReceipt.unique_code" class="row">
+                <span>Kode unik</span>
+                <b>{{ selectedReceipt.unique_code }}</b>
+              </div>
+              <div v-if="selectedReceipt.processed_at" class="row">
+                <span>Waktu diproses</span>
+                <b>{{ selectedReceipt.processed_at }}</b>
+              </div>
+              <div v-if="selectedReceipt.rejection_reason" class="row">
+                <span>Alasan penolakan</span>
+                <b>{{ selectedReceipt.rejection_reason }}</b>
+              </div>
+            </div>
 
-          <p v-if="selectedReceipt.footer_note" class="modal__note">
-            {{ selectedReceipt.footer_note }}
-          </p>
+            <div class="separator"></div>
+
+            <p v-if="selectedReceipt.footer_note" class="modal__note">
+              {{ selectedReceipt.footer_note }}
+            </p>
+          </template>
 
           <button
             type="button"
             class="btn-primary"
-            @click="closeReceipt"
+            @click="tutupStruk"
           >
             Tutup
           </button>
@@ -148,142 +161,194 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-
 // Layout ponsel + proteksi login/peran, sama seperti halaman ortu lain (Beranda, Riwayat, Kontrol)
 definePageMeta({
   layout: 'phone',
   middleware: ['auth', 'ortu']
 })
+</script>
 
-const router = useRouter()
-const selectedReceipt = ref(null)
+<script>
+import { api } from '~/utils/api'
+import { kunciNotifikasi } from '~/store/ortu'
 
-const notifications = ref([
-  {
-    id: 1,
-    title: 'Top-up saldo ditolak',
-    category: 'Saldo saku',
-    student_name: 'Aditya Pratama',
-    request_id: 'TU-19',
-    status: 'Ditolak',
-    base_amount: 100000,
-    unique_code: 482,
-    total_amount: 100482,
-    created_at: '15 Nov 2026, 20.19',
-    processed_at: '2026-11-15T13:20:34.852Z',
-    rejection_reason: 'Nominal tidak cocok',
-    footer_note: 'Bukti transfer belum diunggah.',
-    is_read: false
+export default {
+  name: 'OrtuNotifikasi',
+  data() {
+    return {
+      memuat: true,
+      error: '',
+      sedangMuat: false,
+      timer: null,
+      selectedReceipt: null,
+      memuatStruk: false,
+      errorStruk: ''
+    }
   },
-  {
-    id: 2,
-    title: 'Top-up saldo diterima',
-    category: 'Saldo saku',
-    student_name: 'Aditya Pratama',
-    request_id: 'TU-18',
-    status: 'Diterima',
-    base_amount: 100000,
-    unique_code: 215,
-    total_amount: 100215,
-    created_at: '15 Nov 2026, 20.20',
-    processed_at: '2026-11-15T13:20:10.114Z',
-    rejection_reason: '',
-    footer_note: 'Saldo telah masuk ke dompet siswa.',
-    is_read: true
+  computed: {
+    // Sumber data SAMA dengan lencana lonceng di Beranda (store ortu).
+    notifications() {
+      const sudahDibaca = this.$store.getters['ortu/sudahDibaca']
+      return this.$store.getters['ortu/semuaNotifikasi'].map((n) => {
+        const b = this.infoBadge(n)
+        return {
+          raw: n,
+          key: kunciNotifikasi(n),
+          judul: n.judul,
+          isi: n.isi,
+          waktu: this.tampilWaktu(n.waktu),
+          dibaca: sudahDibaca(n),
+          badge: b.label,
+          badgeClass: b.kelas
+        }
+      })
+    },
+    hasUnread() {
+      return this.$store.getters['ortu/jumlahBelumDibaca'] > 0
+    }
   },
-  {
-    id: 3,
-    title: 'Pembayaran SPP bulanan Periode November 2026',
-    category: 'SPP Bulanan',
-    student_name: 'Kayla Pratama',
-    request_id: 'SPP-104',
-    status: 'Diterima',
-    base_amount: 450000,
-    unique_code: null,
-    total_amount: 450000,
-    created_at: '9 Nov 2026, 19.21',
-    processed_at: '2026-11-09T12:21:05.000Z',
-    rejection_reason: '',
-    footer_note: 'Pembayaran tagihan SPP telah diverifikasi.',
-    is_read: true
+  async mounted() {
+    await this.muat()
+    this.timer = setInterval(() => {
+      if (document.visibilityState === 'visible') this.muat()
+    }, 30000)
+    document.addEventListener('visibilitychange', this.saatTerlihat)
   },
-  {
-    id: 4,
-    title: 'Tagihan baru: SPP bulanan Periode November 2026',
-    category: 'Tagihan SPP',
-    student_name: 'Aditya Pratama',
-    request_id: 'INV-88',
-    status: 'Tagihan',
-    base_amount: 450000,
-    unique_code: null,
-    total_amount: 450000,
-    created_at: '8 Nov 2026, 20.53',
-    processed_at: '2026-11-08T13:53:00.000Z',
-    rejection_reason: '',
-    footer_note: 'Segera lakukan pembayaran sebelum jatuh tempo.',
-    is_read: true
+  beforeUnmount() {
+    if (this.timer) clearInterval(this.timer)
+    document.removeEventListener('visibilitychange', this.saatTerlihat)
   },
-  {
-    id: 5,
-    title: 'Pembayaran SPP September 2026',
-    category: 'SPP Bulanan',
-    student_name: 'Aditya Pratama',
-    request_id: 'SPP-072',
-    status: 'Diterima',
-    base_amount: 450000,
-    unique_code: null,
-    total_amount: 450000,
-    created_at: '2 Nov 2026, 18.18',
-    processed_at: '2026-11-02T11:18:22.410Z',
-    rejection_reason: '',
-    footer_note: 'Pembayaran tagihan SPP telah diverifikasi.',
-    is_read: false
+  methods: {
+    goBack() {
+      this.$router.push('/ortu')
+    },
+    saatTerlihat() {
+      if (document.visibilityState === 'visible') this.muat()
+    },
+    async muat() {
+      if (this.sedangMuat) return
+      this.sedangMuat = true
+      this.error = ''
+      try {
+        await this.$store.dispatch('ortu/muatAnak')
+        const anak = this.$store.state.ortu.anak
+        await Promise.all(anak.map((a) => this.$store.dispatch('ortu/muatTagihan', a.id)))
+        await this.$store.dispatch('ortu/muatPembayaran')
+      } catch (e) {
+        this.error = e.message || 'Notifikasi gagal dimuat.'
+      } finally {
+        this.sedangMuat = false
+        this.memuat = false
+      }
+    },
+    // Waktu dari server berformat tanggal -> WIB; teks lain ("Sekarang", "Jatuh tempo ...") apa adanya
+    tampilWaktu(w) {
+      if (!w) return ''
+      const s = String(w)
+      return /^\d{4}-\d{2}-\d{2}/.test(s) ? this.$waktu(s) : s
+    },
+    infoBadge(n) {
+      const t = String(n.tipe || '')
+      if (t === 'pembayaran_ditolak') return { label: 'Ditolak', kelas: 'badge--coral' }
+      if (t.startsWith('pembayaran_diterima')) return { label: 'Diterima', kelas: 'badge--green' }
+      if (t === 'pembayaran_menunggu') return { label: 'Menunggu', kelas: 'badge--blue' }
+      if (t === 'saldo') return { label: 'Saldo', kelas: 'badge--coral' }
+      if (t.startsWith('tagihan')) return { label: 'Tagihan', kelas: 'badge--blue' }
+      return { label: '', kelas: '' }
+    },
+    // Tandai semua notifikasi sebagai dibaca -> lencana lonceng di Beranda ikut hilang
+    tandaiSemua() {
+      this.$store.dispatch('ortu/tandaiDibaca', this.$store.getters['ortu/semuaNotifikasi'])
+    },
+    bukaItem(item) {
+      const n = item.raw
+      this.$store.dispatch('ortu/tandaiDibaca', [n])
+      if (String(n.tipe || '').startsWith('pembayaran_')) {
+        this.bukaStruk(n)
+        return
+      }
+      const tagihanId = n.tagihan_id || n.tagihanId
+      if (tagihanId) this.$router.push('/ortu/tagihan/' + tagihanId)
+      else if (n.tipe === 'saldo') this.$router.push('/ortu/isi-saldo')
+    },
+    tutupStruk() {
+      this.selectedReceipt = null
+      this.memuatStruk = false
+      this.errorStruk = ''
+    },
+    async bukaStruk(n) {
+      this.selectedReceipt = null
+      this.errorStruk = ''
+      this.memuatStruk = true
+      try {
+        // Pembayaran tagihan langsung dari saldo anak
+        if (String(n.id).startsWith('ledger-')) {
+          const ledgerId = Number(String(n.id).slice(7))
+          const siswaId = Number(n.siswa_id)
+          if (!Number.isSafeInteger(ledgerId) || ledgerId <= 0 || !Number.isSafeInteger(siswaId) || siswaId <= 0) {
+            throw new Error('Referensi pembayaran tidak valid.')
+          }
+          const { riwayat } = await api.riwayat(siswaId)
+          const row = (riwayat || []).find((item) => Number(item.id) === ledgerId)
+          if (!row) throw new Error('Detail pembayaran tidak ditemukan.')
+          const jumlah = Math.abs(Number(row.nominal))
+          this.selectedReceipt = {
+            status: 'Diterima',
+            category: row.keterangan || 'Pembayaran tagihan',
+            student_name: String(n.isi || '').split(':')[0],
+            request_id: 'TRX-' + row.id,
+            base_amount: jumlah,
+            unique_code: null,
+            total_amount: jumlah,
+            created_at: this.tampilWaktu(row.created_at),
+            processed_at: this.tampilWaktu(row.created_at),
+            rejection_reason: '',
+            footer_note: 'Pembayaran dilakukan dari saldo FINKA; tidak ada bukti transfer terpisah.'
+          }
+          return
+        }
+
+        // Top-up / pembayaran lewat transfer
+        const id = Number(n.id)
+        if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Referensi pembayaran tidak valid.')
+        const { topup } = await api.statusTopup(id)
+        if (!topup) throw new Error('Detail pembayaran tidak ditemukan.')
+        const status = topup.status === 'disetujui'
+          ? 'Diterima'
+          : topup.status === 'ditolak'
+            ? 'Ditolak'
+            : 'Menunggu verifikasi'
+        const kode = Number(topup.kode_unik) || 0
+        this.selectedReceipt = {
+          status,
+          category: topup.tujuan || 'Pembayaran',
+          student_name: topup.siswa,
+          request_id: 'TU-' + topup.id,
+          base_amount: Number(topup.nominal),
+          unique_code: kode || null,
+          total_amount: topup.total_transfer || Number(topup.nominal) + kode,
+          created_at: this.tampilWaktu(topup.waktu),
+          processed_at: topup.diproses_at ? this.tampilWaktu(topup.diproses_at) : '',
+          rejection_reason: topup.alasan_tolak || '',
+          footer_note: topup.bukti_tersedia ? '' : 'Bukti transfer belum diunggah.'
+        }
+      } catch (e) {
+        this.errorStruk = e.message || 'Struk digital gagal dimuat.'
+      } finally {
+        this.memuatStruk = false
+      }
+    },
+    formatRupiah(val) {
+      if (val === null || val === undefined) return 'Rp 0'
+      return 'Rp ' + Math.round(Number(val) || 0).toLocaleString('id-ID')
+    },
+    getBadgeClass(status) {
+      const s = (status || '').toLowerCase()
+      if (s === 'diterima' || s === 'lunas') return 'badge--green'
+      if (s === 'ditolak') return 'badge--coral'
+      return 'badge--blue'
+    }
   }
-])
-
-const hasUnread = computed(() => notifications.value.some((n) => !n.is_read))
-
-const goBack = () => {
-  router.push('/ortu')
-}
-
-const openReceipt = (item) => {
-  item.is_read = true
-  selectedReceipt.value = item
-}
-
-const closeReceipt = () => {
-  selectedReceipt.value = null
-}
-
-const markAllAsRead = () => {
-  notifications.value.forEach((n) => {
-    n.is_read = true
-  })
-}
-
-const formatRupiah = (val) => {
-  if (val === null || val === undefined) return 'Rp 0'
-  return 'Rp ' + Number(val).toLocaleString('id-ID')
-}
-
-// Waktu ISO (UTC) -> format lokal WIB, mis. "15 Nov 2026, 20.20"
-const formatWaktu = (val) => {
-  if (!val) return '-'
-  const d = new Date(val)
-  if (Number.isNaN(d.getTime())) return String(val)
-  const tgl = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' })
-  const jam = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
-  return tgl + ', ' + jam
-}
-
-const getBadgeClass = (status) => {
-  const s = (status || '').toLowerCase()
-  if (s === 'diterima' || s === 'lunas') return 'badge--green'
-  if (s === 'ditolak') return 'badge--coral'
-  return 'badge--blue'
 }
 </script>
 
@@ -364,6 +429,18 @@ const getBadgeClass = (status) => {
   -webkit-overflow-scrolling: touch;
 }
 
+.kosong {
+  margin: 14px 0;
+  padding: 18px 14px;
+  text-align: center;
+  color: var(--muted);
+  font: 500 12px/1.45 var(--font-body);
+}
+
+.kosong--error {
+  color: var(--coral);
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -414,9 +491,15 @@ const getBadgeClass = (status) => {
 }
 
 .notif-item__sub {
-  font: 400 12px var(--font-body);
+  font: 400 12px/1.4 var(--font-body);
   color: var(--muted);
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .notif-item__waktu {
@@ -505,6 +588,17 @@ const getBadgeClass = (status) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.modal__state {
+  padding: 18px 4px;
+  text-align: center;
+  font: 500 12.5px/1.45 var(--font-body);
+  color: var(--muted);
+}
+
+.modal__state--error {
+  color: var(--coral);
 }
 
 .modal__hero {
