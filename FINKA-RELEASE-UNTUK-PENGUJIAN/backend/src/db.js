@@ -200,6 +200,7 @@ export async function initDb() {
       limit_aktif INTEGER NOT NULL DEFAULT 0 CHECK(limit_aktif IN (0,1)),
       limit_harian INTEGER NOT NULL DEFAULT 25000 CHECK(limit_harian > 0),
       kartu_diblokir INTEGER NOT NULL DEFAULT 0 CHECK(kartu_diblokir IN (0,1)),
+      kartu_diblokir_oleh TEXT CHECK(kartu_diblokir_oleh IN ('siswa','ortu')),
       qr_version INTEGER NOT NULL DEFAULT 1 CHECK(qr_version > 0),
       updated_at ${TS}
     );
@@ -426,6 +427,13 @@ export async function initDb() {
   }
   if (!userColumns.some((column) => column.name === 'outlet_hours')) {
     await db.exec('ALTER TABLE users ADD COLUMN outlet_hours TEXT')
+  }
+  // Siapa yang memblokir kartu ('siswa' / 'ortu'). Siswa hanya boleh mengaktifkan kembali
+  // blokir yang ia pasang sendiri. Blokir lama tanpa pencatat (NULL) diperlakukan sebagai
+  // blokir orang tua, jadi tetap hanya orang tua yang bisa membukanya.
+  const kontrolColumns = await db.prepare('PRAGMA table_info(siswa_kontrol)').all()
+  if (!kontrolColumns.some((column) => column.name === 'kartu_diblokir_oleh')) {
+    await db.exec("ALTER TABLE siswa_kontrol ADD COLUMN kartu_diblokir_oleh TEXT CHECK(kartu_diblokir_oleh IN ('siswa','ortu'))")
   }
   const productColumns = await db.prepare('PRAGMA table_info(produk)').all()
   if (!productColumns.some((column) => column.name === 'kategori')) {

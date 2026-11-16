@@ -75,6 +75,7 @@ export const api = {
 
   kontrolSaya: (token) => request('GET', '/siswa/saya/kontrol', undefined, token),
   blokirKartuSaya: (token) => request('POST', '/siswa/saya/kartu/blokir', undefined, token),
+  bukaBlokirKartuSaya: (token) => request('POST', '/siswa/saya/kartu/buka-blokir', undefined, token),
   gantiPassword: (lama, baru) => request('POST', '/auth/ganti-password', { password_lama: lama, password_baru: baru }),
   mintaResetPassword: (username, channel) => request('POST', '/auth/password-reset/request', { username, channel }),
   verifikasiResetPassword: (challengeId, otp) => request('POST', '/auth/password-reset/verify', { challenge_id: challengeId, otp }),

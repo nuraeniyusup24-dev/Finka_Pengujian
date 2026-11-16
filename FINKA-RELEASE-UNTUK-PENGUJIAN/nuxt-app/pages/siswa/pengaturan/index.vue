@@ -54,6 +54,28 @@ definePageMeta({
         <span class="action__arrow">›</span>
       </nuxt-link>
 
+      <section class="card blok" :class="{ 'blok--danger': kartu.diblokir }" aria-labelledby="blok-judul">
+        <div class="blok__head">
+          <div class="blok__teks">
+            <b id="blok-judul">Blokir kartu &amp; QR</b>
+            <small>{{ keteranganBlokir }}</small>
+          </div>
+          <ToggleSwitch
+            :value="kartu.diblokir"
+            danger
+            aria-label="Blokir kartu dan QR"
+            :disabled="kartu.memuat || kartu.menyimpan || kartuTerkunci"
+            @input="ubahBlokir"
+          />
+        </div>
+        <div v-if="kartu.diblokir" class="blok__warn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--coral)" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></svg>
+          <p>Kartu diblokir. Semua transaksi kantin dan koperasi ditolak{{ kartuTerkunci ? ' sampai orang tua/wali membuka blokir.' : ' sampai kamu mengaktifkannya kembali.' }}</p>
+        </div>
+        <p v-if="kartu.error" class="feedback feedback--error" role="alert">{{ kartu.error }}</p>
+        <p v-else-if="kartu.pesan" class="feedback feedback--success" role="status">{{ kartu.pesan }}</p>
+      </section>
+
       <button type="button" class="keluar" @click="logout">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
         Keluar dari akun
@@ -74,14 +96,64 @@ export default {
       form: { email: '', no_hp: '' },
       menyimpanKontak: false,
       kontakError: '',
-      kontakSukses: ''
+      kontakSukses: '',
+      // Status kartu: oleh = 'siswa' (boleh diaktifkan kembali sendiri) atau 'ortu' (hanya orang tua yang bisa membuka)
+      kartu: { memuat: true, menyimpan: false, diblokir: false, oleh: null, error: '', pesan: '' }
     }
   },
   computed: {
     user() { return this.$store.state.auth.user || {} },
-    inisial() { return (this.user.nama || 'S').trim().split(/\s+/).slice(0, 2).map((word) => word.charAt(0)).join('').toUpperCase() }
+    inisial() { return (this.user.nama || 'S').trim().split(/\s+/).slice(0, 2).map((word) => word.charAt(0)).join('').toUpperCase() },
+    kartuTerkunci() { return this.kartu.diblokir && this.kartu.oleh !== 'siswa' },
+    keteranganBlokir() {
+      if (this.kartu.memuat) return 'Memuat status kartu…'
+      if (!this.kartu.diblokir) return 'Gunakan bila kartu hilang. Berlaku seketika.'
+      if (this.kartuTerkunci) return 'Diblokir oleh orang tua/wali. Hanya mereka yang dapat membukanya.'
+      return 'Kartu dan QR nonaktif. Geser untuk mengaktifkan kembali bila kartu sudah ketemu.'
+    }
+  },
+  async mounted() {
+    await this.muatKartu()
   },
   methods: {
+    terapkanKartu(data) {
+      this.kartu.diblokir = Boolean(data && data.kartu_diblokir)
+      this.kartu.oleh = this.kartu.diblokir ? (data.kartu_diblokir_oleh || 'ortu') : null
+    },
+    async muatKartu() {
+      this.kartu.memuat = true
+      this.kartu.error = ''
+      try {
+        this.terapkanKartu(await api.kontrolSaya(this.$store.state.auth.token))
+      } catch (error) {
+        this.kartu.error = error.message || 'Status kartu gagal dimuat.'
+      } finally {
+        this.kartu.memuat = false
+      }
+    },
+    async ubahBlokir(aktif) {
+      if (this.kartu.memuat || this.kartu.menyimpan) return
+      const pertanyaan = aktif
+        ? 'Blokir kartu ini? QR tidak dapat dipakai untuk transaksi sampai kamu mengaktifkannya kembali.'
+        : 'Aktifkan kembali kartu ini? Pastikan kartu yang hilang sudah ketemu.'
+      // Dibatalkan: status tidak berubah, jadi tombol otomatis kembali ke posisi semula
+      if (!window.confirm(pertanyaan)) return
+      this.kartu.menyimpan = true
+      this.kartu.error = ''
+      this.kartu.pesan = ''
+      try {
+        const token = this.$store.state.auth.token
+        const hasil = aktif ? await api.blokirKartuSaya(token) : await api.bukaBlokirKartuSaya(token)
+        this.terapkanKartu(hasil)
+        this.kartu.pesan = hasil.pesan || (aktif ? 'Kartu berhasil diblokir.' : 'Kartu aktif kembali.')
+      } catch (error) {
+        this.kartu.error = error.message || 'Status kartu gagal diubah.'
+        // Samakan dengan kondisi sebenarnya di server (mis. ternyata sudah diblokir orang tua)
+        try { this.terapkanKartu(await api.kontrolSaya(this.$store.state.auth.token)) } catch (e) { /* biarkan pesan error di atas */ }
+      } finally {
+        this.kartu.menyimpan = false
+      }
+    },
     mulaiEdit() {
       this.form = { email: this.user.email_akun || '', no_hp: this.user.no_hp_akun || '' }
       this.kontakError = ''
@@ -159,5 +231,15 @@ export default {
 .action b { color: var(--ink); font: 700 13px var(--font-display); }
 .action small { margin-top: 3px; color: var(--muted); font: 400 11.5px/1.45 var(--font-body); }
 .action__arrow { margin-left: auto; color: var(--muted); font-size: 24px; }
+.blok { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.blok--danger { border-color: var(--coral); }
+.blok__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.blok__teks { min-width: 0; }
+.blok__teks b, .blok__teks small { display: block; }
+.blok__teks b { color: var(--ink); font: 700 13px var(--font-display); }
+.blok__teks small { margin-top: 3px; color: var(--muted); font: 400 11.5px/1.45 var(--font-body); text-wrap: pretty; }
+.blok__warn { background: rgba(223,74,55,.08); border-radius: var(--r-sm); padding: 12px; display: flex; gap: 10px; align-items: flex-start; }
+.blok__warn svg { flex: none; margin-top: 1px; }
+.blok__warn p { margin: 0; font: 400 12px/1.5 var(--font-body); color: var(--coral); text-wrap: pretty; }
 .keluar { min-height: 46px; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 4px; border: 1px solid rgba(223,74,55,.25); border-radius: var(--r-sm); background: #fff; color: var(--coral); font: 700 13px var(--font-body); cursor: pointer; }
 </style>

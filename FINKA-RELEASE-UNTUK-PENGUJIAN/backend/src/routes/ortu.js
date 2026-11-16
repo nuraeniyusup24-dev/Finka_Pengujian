@@ -104,13 +104,18 @@ async function milikOrtu(ortuId, siswaId) {
 }
 
 async function ringkasanKontrol(siswaId) {
-  const row = await db.prepare('SELECT limit_aktif, limit_harian, kartu_diblokir FROM siswa_kontrol WHERE user_id = ?').get(siswaId)
+  const row = await db.prepare('SELECT limit_aktif, limit_harian, kartu_diblokir, kartu_diblokir_oleh FROM siswa_kontrol WHERE user_id = ?').get(siswaId)
   const spent = await db.prepare(`SELECT COALESCE(SUM(-nominal), 0) AS total FROM ledger
     WHERE siswa_id = ? AND tipe IN ('pembelian', 'tarik_tunai')
     AND created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', date('now','+7 hours'), '-7 hours')`).get(siswaId)
   const limit = Number(row?.limit_harian || 25000)
   const used = Number(spent?.total || 0)
-  return { limit_aktif: Boolean(row?.limit_aktif), limit, kartu_diblokir: Boolean(row?.kartu_diblokir), terpakai_hari_ini: used, sisa_limit: Math.max(0, limit - used) }
+  const diblokir = Boolean(row?.kartu_diblokir)
+  return {
+    limit_aktif: Boolean(row?.limit_aktif), limit, kartu_diblokir: diblokir,
+    kartu_diblokir_oleh: diblokir ? (row?.kartu_diblokir_oleh || 'ortu') : null,
+    terpakai_hari_ini: used, sisa_limit: Math.max(0, limit - used)
+  }
 }
 
 ortuRouter.get('/anak/:id/kontrol', wajibLogin, wajibRole('ortu'), async (req, res) => {
@@ -125,13 +130,20 @@ ortuRouter.put('/anak/:id/kontrol', wajibLogin, wajibRole('ortu'), async (req, r
   if (limit !== undefined && ![15000, 25000, 35000, 50000].includes(Number(limit))) return res.status(400).json({ error: 'Limit harian tidak valid' })
   if (limit_aktif !== undefined && typeof limit_aktif !== 'boolean') return res.status(400).json({ error: 'limit_aktif harus boolean' })
   if (kartu_diblokir !== undefined && typeof kartu_diblokir !== 'boolean') return res.status(400).json({ error: 'kartu_diblokir harus boolean' })
-  await db.prepare(`INSERT INTO siswa_kontrol (user_id, limit_aktif, limit_harian, kartu_diblokir)
-    VALUES (?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET
+  // Orang tua yang memblokir tercatat sebagai 'ortu' (siswa tidak bisa membukanya); membuka blokir mengosongkan pencatat.
+  // Kalau kartu_diblokir tidak dikirim (mis. hanya ubah limit), pencatat blokir tidak diubah.
+  await db.prepare(`INSERT INTO siswa_kontrol (user_id, limit_aktif, limit_harian, kartu_diblokir, kartu_diblokir_oleh)
+    VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET
     limit_aktif = COALESCE(?, siswa_kontrol.limit_aktif),
     limit_harian = COALESCE(?, siswa_kontrol.limit_harian),
-    kartu_diblokir = COALESCE(?, siswa_kontrol.kartu_diblokir)`)
-    .run(siswaId, limit_aktif ?? false, Number(limit) || 25000, kartu_diblokir ?? false,
-      limit_aktif ?? null, limit === undefined ? null : Number(limit), kartu_diblokir ?? null)
+    kartu_diblokir = COALESCE(?, siswa_kontrol.kartu_diblokir),
+    kartu_diblokir_oleh = CASE
+      WHEN ? IS NULL THEN siswa_kontrol.kartu_diblokir_oleh
+      WHEN ? = 1 THEN 'ortu'
+      ELSE NULL END`)
+    .run(siswaId, limit_aktif ?? false, Number(limit) || 25000, kartu_diblokir ?? false, kartu_diblokir ? 'ortu' : null,
+      limit_aktif ?? null, limit === undefined ? null : Number(limit), kartu_diblokir ?? null,
+      kartu_diblokir ?? null, kartu_diblokir ?? null)
   await audit(req, 'UBAH_KONTROL_SISWA', `Kontrol kartu/limit siswa #${siswaId} diperbarui`, 'users', siswaId)
   res.json(await ringkasanKontrol(siswaId))
 })

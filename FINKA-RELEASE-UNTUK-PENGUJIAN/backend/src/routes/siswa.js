@@ -8,22 +8,58 @@ export const siswaRouter = Router()
 
 siswaRouter.get('/saya/kontrol', wajibLogin, wajibRole('siswa'), async (req, res) => {
   const [control, spent] = await Promise.all([
-    db.prepare('SELECT limit_aktif, limit_harian, kartu_diblokir FROM siswa_kontrol WHERE user_id = ?').get(req.user.id),
+    db.prepare('SELECT limit_aktif, limit_harian, kartu_diblokir, kartu_diblokir_oleh FROM siswa_kontrol WHERE user_id = ?').get(req.user.id),
     db.prepare(`SELECT COALESCE(SUM(-nominal), 0) AS total FROM ledger
       WHERE siswa_id = ? AND tipe IN ('pembelian', 'tarik_tunai')
       AND created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', date('now','+7 hours'), '-7 hours')`).get(req.user.id)
   ])
   const limit = Number(control?.limit_harian || 25000)
   const used = Number(spent?.total || 0)
-  res.json({ limit_aktif: Boolean(control?.limit_aktif), limit, kartu_diblokir: Boolean(control?.kartu_diblokir), terpakai_hari_ini: used, sisa_limit: Math.max(0, limit - used) })
+  const diblokir = Boolean(control?.kartu_diblokir)
+  const oleh = diblokir ? (control?.kartu_diblokir_oleh || 'ortu') : null
+  res.json({
+    limit_aktif: Boolean(control?.limit_aktif), limit, kartu_diblokir: diblokir,
+    kartu_diblokir_oleh: oleh,
+    // Siswa hanya boleh mengaktifkan kembali blokir yang ia pasang sendiri
+    bisa_buka_blokir: diblokir && oleh === 'siswa',
+    terpakai_hari_ini: used, sisa_limit: Math.max(0, limit - used)
+  })
 })
 
+// Blokir kartu (mis. kartu hilang). Kalau sudah diblokir orang tua, pencatat blokir tidak diubah
+// supaya siswa tidak bisa "mengambil alih" lalu membukanya sendiri.
 siswaRouter.post('/saya/kartu/blokir', wajibLogin, wajibRole('siswa'), async (req, res) => {
   const siswaId = Number(req.user.id)
-  await db.prepare(`INSERT INTO siswa_kontrol (user_id, kartu_diblokir) VALUES (?, TRUE)
-    ON CONFLICT (user_id) DO UPDATE SET kartu_diblokir = TRUE`).run(siswaId)
+  await db.prepare(`INSERT INTO siswa_kontrol (user_id, kartu_diblokir, kartu_diblokir_oleh) VALUES (?, TRUE, 'siswa')
+    ON CONFLICT (user_id) DO UPDATE SET
+      kartu_diblokir_oleh = CASE WHEN siswa_kontrol.kartu_diblokir = 1 THEN siswa_kontrol.kartu_diblokir_oleh ELSE 'siswa' END,
+      kartu_diblokir = TRUE`).run(siswaId)
+  const row = await db.prepare('SELECT kartu_diblokir_oleh FROM siswa_kontrol WHERE user_id = ?').get(siswaId)
+  const oleh = row?.kartu_diblokir_oleh || 'ortu'
   await audit(req, 'BLOKIR_KARTU_SISWA', `Siswa #${siswaId} memblokir kartunya`, 'users', siswaId)
-  res.json({ pesan: 'Kartu berhasil diblokir. Hubungi Orang Tua/Wali untuk membuka blokir.', kartu_diblokir: true })
+  res.json({
+    pesan: oleh === 'siswa'
+      ? 'Kartu berhasil diblokir. Kamu bisa mengaktifkannya kembali di Pengaturan akun.'
+      : 'Kartu sudah diblokir oleh Orang Tua/Wali. Hanya mereka yang dapat membukanya.',
+    kartu_diblokir: true, kartu_diblokir_oleh: oleh, bisa_buka_blokir: oleh === 'siswa'
+  })
+})
+
+// Aktifkan kembali kartu (mis. kartu yang hilang sudah ketemu). Hanya untuk blokir yang dipasang siswa sendiri.
+siswaRouter.post('/saya/kartu/buka-blokir', wajibLogin, wajibRole('siswa'), async (req, res) => {
+  const siswaId = Number(req.user.id)
+  const hasil = await db.prepare(`UPDATE siswa_kontrol SET kartu_diblokir = 0, kartu_diblokir_oleh = NULL
+    WHERE user_id = ? AND kartu_diblokir = 1 AND kartu_diblokir_oleh = 'siswa'`).run(siswaId)
+  if (hasil.changes === 0) {
+    const row = await db.prepare('SELECT kartu_diblokir FROM siswa_kontrol WHERE user_id = ?').get(siswaId)
+    if (row?.kartu_diblokir) {
+      return res.status(403).json({ error: 'Kartu diblokir oleh Orang Tua/Wali. Hanya Orang Tua/Wali yang dapat membukanya.' })
+    }
+    // Sudah aktif: aman dijalankan ulang (mis. dobel tap)
+    return res.json({ pesan: 'Kartu sudah aktif.', kartu_diblokir: false, kartu_diblokir_oleh: null, bisa_buka_blokir: false })
+  }
+  await audit(req, 'BUKA_BLOKIR_KARTU_SISWA', `Siswa #${siswaId} mengaktifkan kembali kartunya`, 'users', siswaId)
+  res.json({ pesan: 'Kartu aktif kembali.', kartu_diblokir: false, kartu_diblokir_oleh: null, bisa_buka_blokir: false })
 })
 
 siswaRouter.post('/saya/ganti-pin', wajibLogin, wajibRole('siswa'), async (req, res) => {

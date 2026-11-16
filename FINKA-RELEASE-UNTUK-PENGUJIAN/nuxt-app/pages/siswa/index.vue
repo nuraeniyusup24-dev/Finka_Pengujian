@@ -81,7 +81,7 @@ export default {
     labelLimit() {
       const k = this.kontrol
       if (!k) return ''
-      if (k.kartu_diblokir) return 'Kartu diblokir oleh orang tua'
+      if (k.kartu_diblokir) return k.kartu_diblokir_oleh === 'siswa' ? 'Kartu kamu sedang diblokir' : 'Kartu diblokir oleh orang tua'
       return k.limit_aktif ? 'Sisa limit hari ini ' + this.$rp(k.sisa_limit) : 'Tanpa limit harian'
     },
     hariIni() { return this.$store.getters['profil-siswa/hariIni'] }

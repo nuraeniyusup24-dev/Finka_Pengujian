@@ -32,7 +32,10 @@ definePageMeta({
         </div>
       </div>
       <div class="pinnote">🔒 <span>Setelah scan, kantin tetap meminta PIN 6 digit kamu</span></div>
-      <div v-if="kartuDiblokir" class="blocked-notice" role="status">Kartu diblokir. Hubungi orang tua/wali untuk membuka blokir.</div>
+      <div v-if="kartuDiblokir" class="blocked-notice" role="status">
+        <template v-if="kartuDiblokirOleh === 'siswa'">Kartu diblokir. Sudah ketemu? <nuxt-link to="/siswa/pengaturan">Aktifkan kembali di Pengaturan akun</nuxt-link>.</template>
+        <template v-else>Kartu diblokir. Hubungi orang tua/wali untuk membuka blokir.</template>
+      </div>
       <div v-else-if="error" class="error" role="alert">{{ error }} <button type="button" @click="muatQr">Coba lagi</button></div>
       <div class="format-cetak">PDF seukuran kartu: 53,98 × 85,6 mm (portrait).</div>
       <button class="cetak" type="button" :disabled="!qrSiap || mengunduhKartu" @click="cetak">
@@ -51,7 +54,7 @@ import { api } from '~/utils/api'
 export default {
 
 
-  data() { return { error: '', pdfError: '', memuat: false, memblokir: false, mengunduhKartu: false, kartuDiblokir: false, qrSiap: false } },
+  data() { return { error: '', pdfError: '', memuat: false, memblokir: false, mengunduhKartu: false, kartuDiblokir: false, kartuDiblokirOleh: null, qrSiap: false } },
   computed: {
     siswa() { return this.$store.state['profil-siswa'].profil || { inisial: '', nama: '', kelas: '', nis: '' } }
   },
@@ -60,6 +63,7 @@ export default {
     try {
       const control = await api.kontrolSaya(this.$store.state.auth.token)
       this.kartuDiblokir = Boolean(control.kartu_diblokir)
+      this.kartuDiblokirOleh = this.kartuDiblokir ? (control.kartu_diblokir_oleh || 'ortu') : null
       if (!this.kartuDiblokir) await this.muatQr()
     } catch (e) {
       this.error = e.message || 'Status kartu gagal dimuat.'
@@ -78,12 +82,13 @@ export default {
     },
     async blokirKartu() {
       if (this.memblokir || this.memuat || this.kartuDiblokir) return
-      if (!window.confirm('Blokir kartu ini? QR tidak dapat digunakan untuk transaksi sampai orang tua/wali membuka blokir.')) return
+      if (!window.confirm('Blokir kartu ini? QR tidak dapat digunakan untuk transaksi sampai kamu mengaktifkannya kembali di Pengaturan akun.')) return
       this.memblokir = true
       this.error = ''
       try {
-        await api.blokirKartuSaya(this.$store.state.auth.token)
+        const hasil = await api.blokirKartuSaya(this.$store.state.auth.token)
         this.kartuDiblokir = true
+        this.kartuDiblokirOleh = (hasil && hasil.kartu_diblokir_oleh) || 'siswa'
         this.qrSiap = false
         const context = this.$refs.qr && this.$refs.qr.getContext('2d')
         if (context) context.clearRect(0, 0, this.$refs.qr.width, this.$refs.qr.height)
@@ -208,6 +213,7 @@ export default {
 .error { color: #ffd4ce; font: 500 12px var(--font-body); text-align: center; }
 .error button { border: 0; background: transparent; color: #fff; font-weight: 700; cursor: pointer; }
 .blocked-notice { color: #ffd4ce; font: 500 12px/1.5 var(--font-body); text-align: center; }
+.blocked-notice a { color: #fff; font-weight: 700; text-decoration: underline; }
 .format-cetak { color:rgba(255,255,255,.7); font:400 11px var(--font-body); text-align:center; }
 .pinnote {
   display: flex; align-items: center; gap: 9px;
