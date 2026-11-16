@@ -42,7 +42,6 @@ definePageMeta({
         {{ mengunduhKartu ? 'Menyiapkan PDF…' : 'Unduh PDF kartu ukuran asli' }}
       </button>
       <div v-if="pdfError" class="error" role="alert">{{ pdfError }}</div>
-      <button v-if="!kartuDiblokir" class="blokir-qr" type="button" :disabled="memblokir || memuat" @click="blokirKartu">{{ memblokir ? 'Memblokir kartu…' : 'Blokir kartu ini' }}</button>
     </div>
   </div>
 </template>
@@ -54,7 +53,7 @@ import { api } from '~/utils/api'
 export default {
 
 
-  data() { return { error: '', pdfError: '', memuat: false, memblokir: false, mengunduhKartu: false, kartuDiblokir: false, kartuDiblokirOleh: null, qrSiap: false } },
+  data() { return { error: '', pdfError: '', memuat: false, mengunduhKartu: false, kartuDiblokir: false, kartuDiblokirOleh: null, qrSiap: false } },
   computed: {
     siswa() { return this.$store.state['profil-siswa'].profil || { inisial: '', nama: '', kelas: '', nis: '' } }
   },
@@ -79,24 +78,6 @@ export default {
         this.qrSiap = true
       } catch (e) { this.error = e.message || 'QR gagal dimuat' }
       finally { this.memuat = false }
-    },
-    async blokirKartu() {
-      if (this.memblokir || this.memuat || this.kartuDiblokir) return
-      if (!window.confirm('Blokir kartu ini? QR tidak dapat digunakan untuk transaksi sampai kamu mengaktifkannya kembali di Pengaturan akun.')) return
-      this.memblokir = true
-      this.error = ''
-      try {
-        const hasil = await api.blokirKartuSaya(this.$store.state.auth.token)
-        this.kartuDiblokir = true
-        this.kartuDiblokirOleh = (hasil && hasil.kartu_diblokir_oleh) || 'siswa'
-        this.qrSiap = false
-        const context = this.$refs.qr && this.$refs.qr.getContext('2d')
-        if (context) context.clearRect(0, 0, this.$refs.qr.width, this.$refs.qr.height)
-      } catch (e) {
-        this.error = e.message || 'Gagal memblokir kartu.'
-      } finally {
-        this.memblokir = false
-      }
     },
     async cetak() {
       if (!this.qrSiap || this.mengunduhKartu || !this.$refs.qr) return
@@ -208,8 +189,6 @@ export default {
 .timer i { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--green); animation: fkPulse 1.6s ease-in-out infinite; }
 .cetak { border: 1px solid rgba(255,255,255,.32); border-radius: var(--r-pill); padding: 10px 16px; background: transparent; color: #fff; font: 600 12px var(--font-body); cursor: pointer; }
 .cetak:disabled { opacity: .5; cursor: wait; }
-.blokir-qr { border: 1px solid rgba(255,255,255,.32); border-radius: var(--r-pill); padding: 10px 16px; background: transparent; color: #ffd4ce; font: 600 12px var(--font-body); cursor: pointer; }
-.blokir-qr:disabled { opacity: .5; cursor: wait; }
 .error { color: #ffd4ce; font: 500 12px var(--font-body); text-align: center; }
 .error button { border: 0; background: transparent; color: #fff; font-weight: 700; cursor: pointer; }
 .blocked-notice { color: #ffd4ce; font: 500 12px/1.5 var(--font-body); text-align: center; }
@@ -248,6 +227,6 @@ export default {
   .wrap .timer { font-size:6pt !important; color:#0A0D3B !important; }
   .wrap .timer i { display:block !important; width:1.5mm !important; height:1.5mm !important; background:#1E2EBB !important; animation:none !important; }
   .wrap .timer span { color:#0A0D3B !important; }
-  .wrap .pinnote, .wrap .format-cetak, .wrap .cetak, .wrap .blokir-qr, .wrap .blocked-notice, .wrap .error { display:none !important; }
+  .wrap .pinnote, .wrap .format-cetak, .wrap .cetak, .wrap .blocked-notice, .wrap .error { display:none !important; }
 }
 </style>

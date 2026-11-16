@@ -81,6 +81,18 @@ definePageMeta({
         Keluar dari akun
       </button>
     </div>
+
+    <!-- Pop-up konfirmasi blokir / aktifkan kembali kartu (pengganti dialog bawaan browser) -->
+    <ConfirmModal
+      :open="konfirmasi.buka"
+      :title="teksKonfirmasi.judul"
+      :message="teksKonfirmasi.pesan"
+      :confirm-label="teksKonfirmasi.tombol"
+      :tone="teksKonfirmasi.tone"
+      :loading="kartu.menyimpan"
+      @confirm="jalankanBlokir"
+      @cancel="batalKonfirmasi"
+    />
   </div>
 </template>
 
@@ -98,7 +110,9 @@ export default {
       kontakError: '',
       kontakSukses: '',
       // Status kartu: oleh = 'siswa' (boleh diaktifkan kembali sendiri) atau 'ortu' (hanya orang tua yang bisa membuka)
-      kartu: { memuat: true, menyimpan: false, diblokir: false, oleh: null, error: '', pesan: '' }
+      kartu: { memuat: true, menyimpan: false, diblokir: false, oleh: null, error: '', pesan: '' },
+      // Pop-up konfirmasi: aktif = true berarti mau memblokir, false berarti mau mengaktifkan kembali
+      konfirmasi: { buka: false, aktif: false }
     }
   },
   computed: {
@@ -110,6 +124,21 @@ export default {
       if (!this.kartu.diblokir) return 'Gunakan bila kartu hilang. Berlaku seketika.'
       if (this.kartuTerkunci) return 'Diblokir oleh orang tua/wali. Hanya mereka yang dapat membukanya.'
       return 'Kartu dan QR nonaktif. Geser untuk mengaktifkan kembali bila kartu sudah ketemu.'
+    },
+    teksKonfirmasi() {
+      return this.konfirmasi.aktif
+        ? {
+            judul: 'Blokir kartu ini?',
+            pesan: 'QR tidak dapat dipakai untuk transaksi di kantin dan koperasi sampai kamu mengaktifkannya kembali di Pengaturan akun.',
+            tombol: 'Ya, blokir kartu',
+            tone: 'danger'
+          }
+        : {
+            judul: 'Aktifkan kembali kartu?',
+            pesan: 'Pastikan kartu yang hilang sudah ketemu. Setelah aktif, QR bisa dipakai lagi untuk transaksi.',
+            tombol: 'Ya, aktifkan',
+            tone: 'primary'
+          }
     }
   },
   async mounted() {
@@ -131,13 +160,19 @@ export default {
         this.kartu.memuat = false
       }
     },
-    async ubahBlokir(aktif) {
+    // Toggle digeser/diketuk: tampilkan pop-up konfirmasi dulu. Status baru berubah setelah dikonfirmasi,
+    // jadi kalau dibatalkan tombol tetap di posisi semula.
+    ubahBlokir(aktif) {
       if (this.kartu.memuat || this.kartu.menyimpan) return
-      const pertanyaan = aktif
-        ? 'Blokir kartu ini? QR tidak dapat dipakai untuk transaksi sampai kamu mengaktifkannya kembali.'
-        : 'Aktifkan kembali kartu ini? Pastikan kartu yang hilang sudah ketemu.'
-      // Dibatalkan: status tidak berubah, jadi tombol otomatis kembali ke posisi semula
-      if (!window.confirm(pertanyaan)) return
+      this.konfirmasi = { buka: true, aktif: Boolean(aktif) }
+    },
+    batalKonfirmasi() {
+      if (this.kartu.menyimpan) return
+      this.konfirmasi.buka = false
+    },
+    async jalankanBlokir() {
+      if (this.kartu.memuat || this.kartu.menyimpan) return
+      const aktif = this.konfirmasi.aktif
       this.kartu.menyimpan = true
       this.kartu.error = ''
       this.kartu.pesan = ''
@@ -152,6 +187,7 @@ export default {
         try { this.terapkanKartu(await api.kontrolSaya(this.$store.state.auth.token)) } catch (e) { /* biarkan pesan error di atas */ }
       } finally {
         this.kartu.menyimpan = false
+        this.konfirmasi.buka = false
       }
     },
     mulaiEdit() {
