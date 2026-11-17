@@ -31,11 +31,11 @@ export const getters = {
   jumlahItem: (s) => Object.keys(s.cart).reduce((a, k) => a + s.cart[k], 0),
   items: (s, g, root) =>
     s.mode === 'tunai'
-      ? [{ label: 'Ambil tunai di kasir', harga: s.tunai }]
+      ? [{ label: 'Ambil tunai di kasir', nama: 'Ambil tunai di kasir', qty: 1, harga: s.tunai }]
       : Object.keys(s.cart)
           .map((id) => ({ p: root.produk.find((x) => String(x.id) === String(id)), n: s.cart[id] }))
           .filter((x) => x.p)
-          .map((x) => ({ label: x.p.nama + ' ×' + x.n, harga: x.p.harga * x.n })),
+          .map((x) => ({ label: x.p.nama + ' ×' + x.n, nama: x.p.nama, qty: x.n, harga: x.p.harga * x.n })),
   siswaScan: (s) => s.scanStudent,
   cukup: (s, g) => (g.siswaScan ? g.siswaScan.saldo >= g.total : false)
 }

@@ -84,9 +84,11 @@ export default {
           tunai: state.mode === 'tunai',
           nama: this.siswa.nama,
           kelas: this.siswa.kelas,
+          nis: this.siswa.nis,
           items: rincian,
           outlet: info.nama,
-          kasir: info.kasir,
+          kasir: (this.$store.state.auth.user && this.$store.state.auth.user.nama) || info.kasir,
+          waktuIso: now.toISOString(),
           waktu: now.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':').replace(',', '')
         })
         this.$store.commit('pos/setPin', '')

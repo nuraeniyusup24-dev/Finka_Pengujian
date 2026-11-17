@@ -28,51 +28,29 @@ definePageMeta({
       </div>
     </div>
     <div class="aksi">
-      <button type="button" class="btn btn--ghost cetak" @click="cetak">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="9" rx="2" /><path d="M6 14h12v7H6z" /></svg>
-        Cetak struk
-      </button>
-      <button class="btn btn--primary" @click="lagi">Transaksi berikutnya</button>
-    </div>
-
-    <!-- Struk thermal 80 mm: hanya tampil saat dicetak -->
-    <div v-if="snapshot" class="print-struk">
-      <header class="struk-brand">
-        <div class="struk-logo">FINKA</div>
-        <div class="struk-tagline">PEMBAYARAN SEKOLAH DIGITAL</div>
-        <div>{{ snapshot.outlet }}</div>
-        <div>Kasir: {{ snapshot.kasir }}</div>
-      </header>
-      <div class="struk-separator"></div>
-      <div class="struk-meta"><span>No. transaksi</span><b>{{ idTrx }}</b></div>
-      <div class="struk-meta"><span>Waktu</span><b>{{ snapshot.waktu }}</b></div>
-      <div class="struk-meta"><span>Siswa</span><b>{{ snapshot.nama }}</b></div>
-      <div class="struk-separator"></div>
-      <div class="struk-section-title">{{ tunai ? 'PENARIKAN TUNAI' : 'RINCIAN BELANJA' }}</div>
-      <div v-for="(it, i) in snapshot.items" :key="i" class="struk-item">
-        <span>{{ it.label }}</span>
-        <b>{{ it.harga | rp }}</b>
+      <p v-if="pdfError" class="pdf-error" role="alert">{{ pdfError }}</p>
+      <div class="aksi__baris">
+        <button type="button" class="btn btn--ghost cetak" :disabled="!!menyiapkan" @click="cetak">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="9" rx="2" /><path d="M6 14h12v7H6z" /></svg>
+          {{ menyiapkan === 'cetak' ? 'Menyiapkan…' : 'Cetak struk' }}
+        </button>
+        <button type="button" class="btn btn--ghost cetak" :disabled="!!menyiapkan" @click="unduh">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+          {{ menyiapkan === 'unduh' ? 'Menyiapkan…' : 'Unduh PDF' }}
+        </button>
       </div>
-      <div class="struk-separator"></div>
-      <div class="struk-total"><span>TOTAL</span><b>{{ total | rp }}</b></div>
-      <div v-if="tunai" class="struk-meta"><span>Tunai diserahkan</span><b>{{ total | rp }}</b></div>
-      <div class="struk-meta"><span>Saldo sebelum</span><b>{{ sebelum | rp }}</b></div>
-      <div class="struk-meta"><span>Sisa saldo</span><b>{{ sisa | rp }}</b></div>
-      <div class="struk-separator"></div>
-      <footer class="struk-footer">
-        <b>TRANSAKSI BERHASIL</b>
-        <div>Terima kasih telah menggunakan Finka.</div>
-        <div>Simpan struk ini sebagai bukti transaksi.</div>
-      </footer>
+      <button class="btn btn--primary" @click="lagi">Transaksi berikutnya</button>
     </div>
   </div>
 </template>
 
 <script>
+import { buatStrukPdf, namaFileStruk, cetakStrukHtml } from '~/utils/strukPdf'
+
 export default {
 
   data() {
-    return { snapshot: null, idTrx: '' }
+    return { snapshot: null, idTrx: '', menyiapkan: '', pdfError: '' }
   },
   computed: {
     tunai() { return this.snapshot ? this.snapshot.tunai : false },
@@ -90,19 +68,73 @@ export default {
       total: result.total,
       nama: result.nama + (result.kelas ? ' · ' + result.kelas : ''),
       namaSiswa: result.nama,
+      kelas: result.kelas || '',
+      nis: result.nis || '',
       sisa: result.saldoBaru,
       sebelum: result.saldoSebelum,
       items: result.items,
       outlet: result.outlet,
       kasir: result.kasir,
-      waktu: result.waktu
+      waktu: result.waktuIso || result.waktu
     }
   },
   mounted() {
     if (!this.snapshot) this.$router.replace('/pic')
   },
   methods: {
-    cetak() { window.print() },
+    dataStruk() {
+      const sn = this.snapshot
+      return {
+        idTrx: this.idTrx,
+        tunai: sn.tunai,
+        total: sn.total,
+        namaSiswa: sn.namaSiswa,
+        kelas: sn.kelas,
+        nis: sn.nis,
+        items: (sn.items || []).map((it) => ({
+          nama: it.nama || it.label,
+          qty: it.qty || 1,
+          harga: it.harga
+        })),
+        outlet: sn.outlet,
+        kasir: sn.kasir,
+        waktu: sn.waktu,
+        sebelum: sn.sebelum,
+        sisa: sn.sisa
+      }
+    },
+    // Dialog cetak browser langsung terbuka berisi struk 80 mm (dicetak dari iframe tersembunyi).
+    // Jika browser menolak mencetak, struk diunduh sebagai PDF.
+    async cetak() {
+      if (!this.snapshot || this.menyiapkan) return
+      this.menyiapkan = 'cetak'
+      this.pdfError = ''
+      try {
+        const tercetak = await cetakStrukHtml(this.dataStruk())
+        if (!tercetak) {
+          const doc = await buatStrukPdf(this.dataStruk())
+          doc.save(namaFileStruk(this.idTrx))
+          this.pdfError = 'Dialog cetak tidak bisa dibuka di browser ini, jadi struk diunduh sebagai PDF.'
+        }
+      } catch (e) {
+        this.pdfError = 'Struk gagal disiapkan. Coba lagi atau unduh PDF.'
+      } finally {
+        this.menyiapkan = ''
+      }
+    },
+    async unduh() {
+      if (!this.snapshot || this.menyiapkan) return
+      this.menyiapkan = 'unduh'
+      this.pdfError = ''
+      try {
+        const doc = await buatStrukPdf(this.dataStruk())
+        doc.save(namaFileStruk(this.idTrx))
+      } catch (e) {
+        this.pdfError = 'PDF struk gagal dibuat. Coba lagi.'
+      } finally {
+        this.menyiapkan = ''
+      }
+    },
     lagi() {
       this.$store.commit('pos/reset')
       this.$router.push('/pic')
@@ -113,9 +145,12 @@ export default {
 
 <style scoped>
 .aksi { display: flex; flex-direction: column; gap: 10px; }
+.aksi__baris { display: flex; gap: 10px; }
+.aksi__baris .cetak { flex: 1; }
+.pdf-error { margin: 0; text-align: center; font: 500 12px var(--font-body); color: var(--coral); }
+.cetak:disabled { opacity: .6; cursor: wait; }
 .cetak { display: flex; align-items: center; justify-content: center; gap: 9px; border: 1.5px solid var(--blue); color: var(--blue); background: #fff; }
 .cetak:hover { background: var(--blue-soft); }
-.print-struk { display: none; }
 .wrap { flex: 1; display: flex; flex-direction: column; background: #fff; padding: 26px 22px; min-height: 0; overflow-y: auto; }
 .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
 .cek { width: 74px; height: 74px; border-radius: var(--r-pill); background: rgba(26,128,64,.12); display: flex; align-items: center; justify-content: center; }
@@ -132,51 +167,4 @@ export default {
 .note { display: flex; align-items: center; gap: 8px; font: 400 12px var(--font-body); color: var(--muted); }
 .note i { width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--green); }
 
-.struk-brand, .struk-footer { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; }
-.struk-logo { font: 800 25px/1 var(--font-display); letter-spacing: .12em; }
-.struk-tagline { margin: 3px 0 7px; font: 700 8px var(--font-body); letter-spacing: .12em; }
-.struk-separator { border-top: 1px dashed #555; margin: 10px 0; }
-.struk-meta, .struk-total { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin: 4px 0; }
-.struk-meta b { max-width: 62%; text-align: right; overflow-wrap: anywhere; }
-.struk-section-title { margin: 6px 0; font-weight: 700; }
-.struk-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin: 5px 0; }
-.struk-item span { max-width: 68%; overflow-wrap: anywhere; }
-.struk-item b { text-align: right; white-space: nowrap; }
-.struk-total { margin: 8px 0; font-weight: 800; font-size: 13px; }
-.struk-footer { margin-top: 9px; line-height: 1.45; }
-
-@media print {
-  @page { size: 80mm 110mm; margin: 0; }
-  :global(html), :global(body), :global(#__nuxt), :global(#__layout) {
-    width: 80mm !important;
-    min-width: 80mm !important;
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    background: #fff !important;
-  }
-  :global(body *) { visibility: hidden !important; }
-  .print-struk, .print-struk * { visibility: visible !important; }
-  .wrap { display: block !important; position: static; width: 80mm; min-height: 0; padding: 0; overflow: visible; background: #fff; }
-  .stage, .aksi { display: none !important; }
-  .print-struk {
-    display: block !important;
-    position: static;
-    width: 80mm !important;
-    max-width: 80mm !important;
-    box-sizing: border-box;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 4mm;
-    background: #fff;
-    color: #111;
-    font: 10.5px/1.45 Arial, sans-serif;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-}
 </style>
