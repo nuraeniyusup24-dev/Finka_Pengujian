@@ -12,36 +12,12 @@ definePageMeta({
       <div v-if="memuat" class="state">Memuat detail transaksi…</div>
       <div v-else-if="error" class="state error" role="alert">{{ error }}</div>
       <template v-else-if="ledger">
-        <section class="hero card">
-          <div class="label">{{ trx.judul }}</div>
-          <div class="nominal display num">{{ Math.abs(ledger.nominal) | rp }}</div>
-          <div>{{ trx.tanggalLabel }} · {{ jam }} WIB</div>
-        </section>
-        <section class="card detail">
-          <div><span>Siswa</span><b>{{ anakNama }}</b></div>
-          <div><span>Jenis</span><b>{{ trx.judul }}</b></div>
-          <div v-if="ledger.keterangan"><span>Keterangan</span><b>{{ ledger.keterangan }}</b></div>
-          <div v-if="ledger.oleh_nama"><span>Diproses oleh</span><b>{{ ledger.oleh_nama }}</b></div>
-          <div v-if="ledger.sisa !== null && ledger.sisa !== undefined"><span>Saldo setelah transaksi</span><b class="num">{{ ledger.sisa | rp }}</b></div>
-          <div><span>ID transaksi</span><b class="num">TRX-{{ ledger.id }}</b></div>
-        </section>
+        <StrukCard :struk="strukLedger" />
+        <button type="button" class="unduh" :disabled="mengunduh" @click="unduh">{{ mengunduh ? 'Menyiapkan PDF…' : 'Unduh struk (PDF)' }}</button>
+        <p v-if="pesanUnduh" class="error note" role="alert">{{ pesanUnduh }}</p>
       </template>
       <template v-else-if="pembayaran">
-        <section class="hero card">
-          <div class="label">{{ pembayaran.tujuan || 'Pembayaran' }}</div>
-          <div class="nominal display num">{{ pembayaran.nominal | rp }}</div>
-          <StatusBadge :status="pembayaran.status" />
-        </section>
-        <section class="card detail">
-          <div><span>Siswa</span><b>{{ pembayaran.siswa }}</b></div>
-          <div><span>Jenis</span><b>{{ pembayaran.tagihan_id ? 'Pembayaran tagihan' : 'Top-up saldo' }}</b></div>
-          <div><span>Diajukan</span><b>{{ pembayaran.waktu | waktu }}</b></div>
-          <div><span>ID permintaan</span><b class="num">TU-{{ pembayaran.id }}</b></div>
-          <div v-if="pembayaran.kode_unik"><span>Kode unik</span><b class="num">{{ pembayaran.kode_unik }}</b></div>
-          <div v-if="pembayaran.total_transfer"><span>Total transfer</span><b class="num">{{ pembayaran.total_transfer | rp }}</b></div>
-          <div v-if="pembayaran.diproses_at"><span>Diproses</span><b>{{ pembayaran.diproses_at | waktu }}</b></div>
-          <div v-if="pembayaran.alasan_tolak"><span>Alasan penolakan</span><b>{{ pembayaran.alasan_tolak }}</b></div>
-        </section>
+        <StrukCard :struk="strukBayar" />
         <section v-if="pembayaran.bukti_tersedia" class="card proof">
           <h2 class="display">Bukti transfer</h2>
           <p v-if="proofError" class="error" role="alert">{{ proofError }}</p>
@@ -52,6 +28,8 @@ definePageMeta({
           <p v-else>Memuat bukti…</p>
         </section>
         <p v-else class="note">Bukti transfer belum tersedia.</p>
+        <button type="button" class="unduh" :disabled="mengunduh" @click="unduh">{{ mengunduh ? 'Menyiapkan PDF…' : 'Unduh struk (PDF)' }}</button>
+        <p v-if="pesanUnduh" class="error note" role="alert">{{ pesanUnduh }}</p>
       </template>
       <div v-else class="state">Detail transaksi tidak ditemukan.</div>
     </div>
@@ -67,17 +45,31 @@ definePageMeta({
 <script>
 import { api } from '~/utils/api'
 import { trxDariLedger } from '~/utils/adapt'
+import { unduhStrukPdf, susunStruk, susunStrukPembayaran } from '~/utils/struk-pdf'
 
 export default {
 
 
-  data() { return { memuat: true, error: '', proofError: '', ledger: null, pembayaran: null, proof: '', viewerTerbuka: false, refreshTimer: null, sedangRefresh: false } },
+  data() { return { memuat: true, error: '', proofError: '', ledger: null, struk: null, mengunduh: false, pesanUnduh: '', pembayaran: null, proof: '', viewerTerbuka: false, refreshTimer: null, sedangRefresh: false } },
   computed: {
     kembali() {
       return this.$route.query.jenis === 'ledger'
         ? '/ortu/riwayat?anak=' + encodeURIComponent(this.$route.query.anak || '')
         : '/ortu/riwayat'
     },
+    dataLedger() {
+      const l = this.ledger
+      if (!l) return null
+      return this.struk || {
+        id: l.id, nomor: 'TRX-' + l.id, tipe: l.tipe, nominal: Number(l.nominal), masuk: Number(l.nominal) > 0,
+        keterangan: l.keterangan, items: [], waktu: l.created_at, oleh: l.oleh_nama, outlet: null,
+        status: 'berhasil', alasan_batal: null,
+        saldo_sebelum: Number(l.sisa) - Number(l.nominal), saldo_sesudah: Number(l.sisa),
+        siswa: { nama: this.anakNama, kelas: '', nis: '' }
+      }
+    },
+    strukLedger() { return susunStruk(this.dataLedger, this.$rp, this.$waktu) },
+    strukBayar() { return susunStrukPembayaran(this.pembayaran, this.$rp, this.$waktu) },
     trx() { return this.ledger ? trxDariLedger(this.ledger) : null },
     jam() { return this.trx ? this.trx.meta.split(' · ')[0] : '' },
     anakNama() {
@@ -99,6 +91,12 @@ export default {
     document.removeEventListener('visibilitychange', this.saatVisibilitasBerubah)
   },
   methods: {
+    async unduh() {
+      this.pesanUnduh = ''; this.mengunduh = true
+      try { await unduhStrukPdf(this.ledger ? this.strukLedger : this.strukBayar) }
+      catch (e) { this.pesanUnduh = 'Gagal membuat PDF. Coba lagi.' }
+      finally { this.mengunduh = false }
+    },
     saatVisibilitasBerubah() {
       if (!document.hidden) this.refreshPembayaran()
     },
@@ -145,6 +143,7 @@ export default {
           const row = (this.$store.state.ortu.riwayat[siswaId] || []).find((r) => Number(r.id) === trxId)
           if (!row) throw new Error('Transaksi tidak ditemukan.')
           this.ledger = Object.assign({}, row, { siswaId })
+          try { this.struk = (await api.strukSiswa(siswaId, trxId)).struk } catch (e) { this.struk = null }
         } else if (this.$route.query.jenis === 'pembayaran') {
           const id = Number(this.$route.query.id)
           if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Referensi pembayaran tidak valid.')
@@ -185,4 +184,7 @@ export default {
 .proof__open img { display:block; max-width:100%; max-height:480px; margin:auto; object-fit:contain; }
 .proof p,.note { color:var(--muted); font:400 12px/1.5 var(--font-body); }
 .note { margin:0; text-align:center; }
+.unduh { border:0; border-radius:var(--r-md); background:var(--blue); color:#fff; padding:14px; font:700 14px var(--font-body); cursor:pointer; }
+.unduh:disabled { opacity:.6; cursor:wait; }
+.rincian-judul { display:block !important; }
 </style>

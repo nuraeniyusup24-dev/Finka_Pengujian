@@ -62,6 +62,7 @@ export const api = {
   notifikasiOrtu: () => request('GET', '/ortu/notifikasi'),
   profilSiswa: (siswaId) => request('GET', '/siswa/' + siswaId),
   saldo: (siswaId) => request('GET', '/siswa/' + siswaId + '/saldo'),
+  strukSiswa: (siswaId, ledgerId) => request('GET', '/siswa/' + siswaId + '/struk/' + ledgerId),
   riwayat: (siswaId) => request('GET', '/siswa/' + siswaId + '/riwayat'),
   daftarSiswa: () => request('GET', '/siswa'),
   produk: () => request('GET', '/pos/produk'),

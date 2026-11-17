@@ -157,10 +157,11 @@ posRouter.delete('/produk/:id', wajibLogin, wajibRole('admin', 'pic'), async (re
 
 posRouter.get('/riwayat-hari-ini', wajibLogin, wajibRole('pic'), async (req, res) => {
   const rows = await db.prepare(`SELECT l.id, l.siswa_id, s.nama AS siswa_nama,
-      sp.kelas, l.tipe, l.nominal, l.keterangan, l.created_at
+      sp.kelas, l.tipe, l.nominal, l.keterangan, l.created_at, m.status
     FROM ledger l
     JOIN users s ON s.id = l.siswa_id
     LEFT JOIN siswa_profil sp ON sp.user_id = s.id
+    LEFT JOIN pos_transaction_meta m ON m.ledger_id = l.id
     WHERE l.dibuat_oleh = ? AND l.tipe IN ('pembelian', 'tarik_tunai')
       AND l.created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', date('now','+7 hours'), '-7 hours')
     ORDER BY l.id DESC

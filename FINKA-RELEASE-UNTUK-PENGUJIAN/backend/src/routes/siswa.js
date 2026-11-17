@@ -131,6 +131,40 @@ siswaRouter.get('/:id/saldo', wajibLogin, async (req, res) => {
   res.json({ siswa_id: Number(siswaId), saldo: await saldoSiswa(siswaId) })
 })
 
+// Rincian struk satu transaksi (untuk halaman struk + unduh PDF)
+function urai_item(ket) {
+  const items = []
+  const re = /(.+?) x(\d+)(?:, |$)/g
+  let m
+  while ((m = re.exec(String(ket || '')))) items.push({ nama: m[1], qty: Number(m[2]) })
+  return items
+}
+
+siswaRouter.get('/:id/struk/:ledgerId', wajibLogin, async (req, res) => {
+  const siswaId = Number(req.params.id)
+  const ledgerId = Number(req.params.ledgerId)
+  if (!Number.isSafeInteger(siswaId) || !Number.isSafeInteger(ledgerId)) return res.status(400).json({ error: 'ID tidak valid' })
+  if (!(await bolehLihat(req.user, siswaId))) return res.status(403).json({ error: 'Tidak punya akses' })
+  const l = await db.prepare(`SELECT l.*, u.nama AS oleh_nama, u.role AS oleh_role FROM ledger l
+    LEFT JOIN users u ON u.id = l.dibuat_oleh WHERE l.id = ? AND l.siswa_id = ?`).get(ledgerId, siswaId)
+  if (!l) return res.status(404).json({ error: 'Transaksi tidak ditemukan' })
+  // PIC hanya boleh membuka struk transaksi yang ia proses sendiri
+  if (req.user.role === 'pic' && l.dibuat_oleh !== req.user.id) return res.status(403).json({ error: 'Tidak punya akses' })
+  const sesudah = Number((await db.prepare('SELECT COALESCE(SUM(nominal),0) AS s FROM ledger WHERE siswa_id = ? AND id <= ?').get(siswaId, ledgerId)).s)
+  const siswa = await db.prepare(`SELECT u.nama, sp.kelas, sp.nis FROM users u LEFT JOIN siswa_profil sp ON sp.user_id = u.id WHERE u.id = ?`).get(siswaId)
+  const meta = await db.prepare(`SELECT m.outlet, m.status, m.alasan_batal, m.dibatalkan_at, p.nama AS kasir
+    FROM pos_transaction_meta m LEFT JOIN users p ON p.id = m.pic_id WHERE m.ledger_id = ?`).get(ledgerId)
+  const nominal = Number(l.nominal)
+  res.json({ struk: {
+    id: l.id, nomor: 'TRX-' + l.id, tipe: l.tipe, nominal, masuk: nominal > 0,
+    keterangan: l.keterangan, items: l.tipe === 'pembelian' ? urai_item(l.keterangan) : [],
+    waktu: l.created_at, oleh: meta?.kasir || l.oleh_nama || null, outlet: meta?.outlet || null,
+    status: meta?.status === 'dibatalkan' ? 'dibatalkan' : 'berhasil', alasan_batal: meta?.alasan_batal || null,
+    saldo_sebelum: sesudah - nominal, saldo_sesudah: sesudah,
+    siswa: { nama: siswa?.nama || '', kelas: siswa?.kelas || '', nis: siswa?.nis || '' }
+  } })
+})
+
 siswaRouter.get('/:id/riwayat', wajibLogin, async (req, res) => {
   const siswaId = req.params.id
   if (!(await bolehLihat(req.user, siswaId))) return res.status(403).json({ error: 'Tidak punya akses' })

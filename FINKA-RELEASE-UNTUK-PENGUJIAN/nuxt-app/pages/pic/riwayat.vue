@@ -18,21 +18,20 @@ definePageMeta({
       <template v-else>
         <div v-for="h in hari" :key="h.tanggal" class="hari">
           <div class="hari__label">{{ h.tanggal }}</div>
-          <button v-for="t in h.items" :key="t.id" type="button" class="row" @click="bukaStruk(t)">
+          <nuxt-link v-for="t in h.items" :key="t.id" :to="{ path: '/pic/struk/' + t.id, query: { siswa: t.siswaId } }" class="row">
             <div class="ik">{{ inisial(t) }}</div>
             <div class="body">
               <div class="judul">{{ namaSiswa(t) }}</div>
               <div class="meta">{{ t.meta }}</div>
             </div>
             <div class="kanan">
-              <div class="nominal num">− {{ $num(Math.abs(t.nominal)) }}</div>
+              <div class="nominal num" :class="t.batal ? 'nominal--batal' : ''">− {{ $num(Math.abs(t.nominal)) }}</div>
               <div v-if="t.sisa !== null" class="sisa num">sisa {{ $num(t.sisa) }}</div>
             </div>
-          </button>
+          </nuxt-link>
         </div>
       </template>
     </div>
-    <DigitalReceiptModal :receipt="struk" @close="struk = null" />
   </div>
 </template>
 
@@ -43,7 +42,7 @@ import { api } from '~/utils/api'
 export default {
 
 
-  data() { return { riwayat: [], memuat: true, error: '', struk: null } },
+  data() { return { riwayat: [], memuat: true, error: '' } },
   async mounted() { await this.muat() },
   computed: {
     outlet() { return this.$store.state.pos.outlet },
@@ -56,11 +55,13 @@ export default {
         const waktu = new Date(row.created_at)
         return {
           id: row.id,
+          siswaId: row.siswa_id,
+          batal: row.status === 'dibatalkan',
           hari: waktu.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }),
           createdAt: row.created_at,
           nama: row.siswa_nama,
           kelas: row.kelas,
-          meta: waktu.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace(':', '.') + ' · ' + row.keterangan,
+          meta: waktu.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace(':', '.') + ' · ' + (row.status === 'dibatalkan' ? 'DIBATALKAN · ' : '') + row.keterangan,
           keterangan: row.keterangan,
           tipe: row.tipe,
           nominal: Number(row.nominal),
@@ -92,22 +93,6 @@ export default {
       }
     },
     namaSiswa(t) { return t.nama + (t.kelas ? ' · ' + t.kelas : '') },
-    bukaStruk(t) {
-      this.struk = {
-        title: t.tipe === 'tarik_tunai' ? 'Tarik tunai' : 'Pembelian',
-        amount: Math.abs(t.nominal),
-        date: t.createdAt,
-        status: 'Berhasil diproses',
-        tone: 'ok',
-        details: [
-          { label: 'Siswa', value: this.namaSiswa(t) },
-          { label: 'Outlet', value: this.namaOutlet },
-          { label: 'Keterangan', value: t.keterangan || 'Transaksi kasir' },
-          { label: 'ID transaksi', value: 'TRX-' + t.id },
-          { label: 'Status', value: 'Transaksi berhasil diproses oleh PIC' }
-        ]
-      }
-    },
     inisial(t) {
       return t.nama.trim().split(/\s+/).slice(0, 2).map((word) => word.charAt(0)).join('').toUpperCase() || '?'
     }
@@ -137,5 +122,7 @@ export default {
 .meta { font: 400 11.5px var(--font-body); color: var(--muted); margin-top: 1px; }
 .kanan { text-align: right; }
 .nominal { font: 700 13.5px var(--font-body); color: var(--ink); }
+.nominal--batal { text-decoration: line-through; color: var(--muted); }
+.row { text-decoration: none; }
 .sisa { font: 400 11px var(--font-body); color: var(--muted); margin-top: 1px; }
 </style>
