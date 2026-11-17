@@ -22,7 +22,7 @@ definePageMeta({
         <div class="outlet__top">
           <div>
             <div class="outlet__nama display">{{ o.nama }}</div>
-            <div class="outlet__jam">PIC {{ o.pic }}</div>
+            <div class="outlet__jam">{{ o.jam }} · PIC {{ o.pic }}</div>
           </div>
         </div>
         <div class="outlet__stat">
